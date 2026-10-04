@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<style>[hidden]{display:none!important} html,body{margin:0;background:#0D1117}</style>
+</head>
+<body>
+<title>Apuração 2026</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --bg: #0D1117;
+    --surface: #161B22;
+    --surface2: #21262D;
+    --fg: #E6EDF3;
+    --fg-muted: #7D8590;
+    --border: #30363D;
+    --green: #3FB950;
+    --green-dim: #0E2318;
+    --yellow: #D29922;
+    --yellow-dim: #2D2208;
+    --blue: #58A6FF;
+    --blue-dim: #0A1929;
+    --gold: #E3B341;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #F0F2F5; --surface: #FFFFFF; --surface2: #E8EBF0;
+      --fg: #1F2328; --fg-muted: #57606A; --border: #CDD1D6;
+      --green: #1A7F37; --green-dim: #D4F7DC;
+      --yellow: #9A6700; --yellow-dim: #FEF3C7;
+      --blue: #0969DA; --blue-dim: #DBE9FF;
+      --gold: #BF8700; color-scheme: light;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F0F2F5; --surface: #FFFFFF; --surface2: #E8EBF0;
+    --fg: #1F2328; --fg-muted: #57606A; --border: #CDD1D6;
+    --green: #1A7F37; --green-dim: #D4F7DC;
+    --yellow: #9A6700; --yellow-dim: #FEF3C7;
+    --blue: #0969DA; --blue-dim: #DBE9FF;
+    --gold: #BF8700; color-scheme: light;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg); color: var(--fg);
+    padding: 10px 10px 16px;
+  }
+
+  /* ── Topo ── */
+  .topbar {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  }
+  .topbar h1 { font-size: 1rem; font-weight: 800; color: var(--fg); flex: 1; white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--fg-muted); flex-shrink: 0; }
+  .dot.live { background: var(--green); animation: pulse 1.4s infinite; }
+  .dot.waiting { background: var(--yellow); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  #status-text { font-size: .72rem; color: var(--fg-muted); flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #last-update { font-size: .68rem; color: var(--fg-muted); flex-shrink: 0; }
+
+  /* ── Relógio de atualização ── */
+  #timer-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: .68rem; color: var(--fg-muted);
+    margin-bottom: 4px;
+  }
+  #next-update { color: var(--yellow); font-weight: 600; }
+  #next-update.busca { color: var(--blue); }
+  #tse-hora.novo { color: var(--green); }
+  #prog { height: 3px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+  #prog-bar { height: 100%; width: 0%; background: var(--yellow); border-radius: 3px; transition: width 1s linear; }
+
+  /* ── Countdown ── */
+  #countdown-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px; text-align: center; margin-bottom: 8px;
+  }
+  #countdown-box .lbl { font-size: .65rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-muted); }
+  #countdown-timer { font-family: 'JetBrains Mono', monospace; font-size: clamp(1.6rem,7vw,2.2rem); font-weight: 600; color: var(--yellow); }
+  #countdown-sub { font-size: .65rem; color: var(--fg-muted); margin-top: 2px; }
+
+  /* ── Grade principal ── */
+  .grade {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .area-pres   { grid-column: 1; grid-row: 1; }
+  .area-govs   { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; gap: 6px; }
+  .area-senado { grid-column: 1; grid-row: 2; }
+  .area-deps   { grid-column: 1 / 3; grid-row: 3; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .card-head {
+    background: var(--surface2); padding: 6px 10px;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 4px;
+    flex-shrink: 0;
+  }
+  .card-head .cn {
+    font-size: .64rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--fg-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card-head .pst {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .68rem; font-weight: 600; color: var(--green); flex-shrink: 0;
+  }
+  .card-body { flex: 1; }
+
+  /* ── Linha de candidato ── */
+  .crow {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    gap: 6px; align-items: center;
+    padding: 8px 10px;
+  }
+  .crow + .crow { border-top: 1px solid var(--border); }
+  .crow.meu { background: var(--blue-dim); }
+
+  /* Senado: separador visual entre os 2 "meus" candidatos e o restante */
+  .crow.senado-sep { border-top: 2px solid var(--border); }
+
+  .cpos {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .7rem; font-weight: 700; color: var(--fg-muted); text-align: center;
+  }
+  .cpos.p1 { color: var(--gold); }
+
+  .cinfo { min-width: 0; }
+  .cnome {
+    font-size: .82rem; font-weight: 700; color: var(--fg);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cmeta {
+    display: flex; align-items: center; gap: 4px; margin-top: 2px;
+  }
+  .cpart { font-size: .64rem; color: var(--fg-muted); white-space: nowrap; }
+  .cbar-w { flex: 1; background: var(--surface2); border-radius: 3px; height: 3px; overflow: hidden; min-width: 16px; }
+  .cbar   { height: 100%; border-radius: 3px; background: var(--fg-muted); width: 0%; transition: width .6s; }
+  .cbar.lead  { background: var(--green); }
+  .cbar.minha { background: var(--blue); }
+
+  .cpct {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .88rem; font-weight: 600;
+    color: var(--fg-muted); text-align: right; flex-shrink: 0;
+  }
+  .cpct.lead  { color: var(--green); }
+  .cpct.minha { color: var(--blue); }
+
+  .badge {
+    font-size: .54rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: 1px 4px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;
+  }
+  .b-el  { background: var(--green-dim); color: var(--green); }
+  .b-1   { background: var(--yellow-dim); color: var(--yellow); }
+  .b-meu { background: var(--blue-dim); color: var(--blue); border: 1px solid #1A3A6E; }
+
+  .esp { padding: 10px; text-align: center; font-size: .7rem; color: var(--fg-muted); }
+
+  /* Senado: destaque dos 2 vagas */
+  .senado-vagas {
+    font-size: .58rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--fg-muted); padding: 3px 10px;
+    background: var(--surface2); border-top: 1px solid var(--border);
+  }
+</style>
+
+<div class="topbar">
+  <h1>Eleicoes 2026</h1>
+  <div class="dot waiting" id="status-dot"></div>
+  <span id="status-text">Aguardando apuracao as 17h</span>
+  <span id="last-update"></span>
+</div>
+
+<div id="timer-row">
+  <span id="next-update">próxima atualização: --</span>
+  <span id="tse-hora"></span>
+</div>
+<div id="prog"><div id="prog-bar"></div></div>
+
+<div id="countdown-box">
+  <div class="lbl">Apuracao comeca em</div>
+  <div id="countdown-timer">--:--:--</div>
+  <div id="countdown-sub">Urnas fecham as 17h · Horario de Brasilia</div>
+</div>
+
+<div class="grade">
+
+  <div class="card area-pres">
+    <div class="card-head">
+      <span class="cn">Presidente</span>
+      <span class="pst" id="pst-presidente">--</span>
+    </div>
+    <div class="card-body" id="rows-presidente"><div class="esp">aguardando...</div></div>
+  </div>
+
+  <div class="area-govs">
+    <div class="card">
+      <div class="card-head">
+        <span class="cn">Gov. RJ</span>
+        <span class="pst" id="pst-governador-rj">--</span>
+      </div>
+      <div class="card-body" id="rows-governador-rj"><div class="esp">aguardando...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="cn">Gov. Para</span>
+        <span class="pst" id="pst-governador-pa">--</span>
+      </div>
+      <div class="card-body" id="rows-governador-pa"><div class="esp">aguardando...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="cn">Gov. SP</span>
+        <span class="pst" id="pst-governador-sp">--</span>
+      </div>
+      <div class="card-body" id="rows-governador-sp"><div class="esp">aguardando...</div></div>
+    </div>
+  </div>
+
+  <!-- SENADO — 2 vagas em disputa -->
+  <div class="card area-senado">
+    <div class="card-head">
+      <span class="cn">Senado RJ</span>
+      <span class="pst" id="pst-senado-rj">--</span>
+    </div>
+    <div class="senado-vagas">2 vagas · Benedita 131 · Pedro Paulo 555</div>
+    <div class="card-body" id="rows-senado-rj"><div class="esp">aguardando...</div></div>
+  </div>
+
+  <div class="area-deps">
+    <div class="card">
+      <div class="card-head">
+        <span class="cn">Dep. Federal RJ</span>
+        <span class="pst" id="pst-depfed-rj">--</span>
+      </div>
+      <div class="card-body" id="rows-depfed-rj"><div class="esp">aguardando...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="cn">Dep. Estadual RJ</span>
+        <span class="pst" id="pst-depestad-rj">--</span>
+      </div>
+      <div class="card-body" id="rows-depestad-rj"><div class="esp">aguardando...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  var BASE = 'https://resultados.tse.jus.br/oficial/ele2026';
+  var CARGOS = {
+    'presidente':    { cod:6257, uf:'br', cargo:'0001', pstId:'pst-presidente',    rowsId:'rows-presidente',    meus:['13'],        topN:4 },
+    'governador-rj': { cod:6259, uf:'rj', cargo:'0003', pstId:'pst-governador-rj', rowsId:'rows-governador-rj', meus:['55'],        topN:3 },
+    'senado-rj':     { cod:6259, uf:'rj', cargo:'0005', pstId:'pst-senado-rj',     rowsId:'rows-senado-rj',     meus:['131','555'], topN:3 },
+    'depfed-rj':     { cod:6259, uf:'rj', cargo:'0006', pstId:'pst-depfed-rj',     rowsId:'rows-depfed-rj',     meus:['1300'],      topN:3 },
+    'depestad-rj':   { cod:6259, uf:'rj', cargo:'0007', pstId:'pst-depestad-rj',   rowsId:'rows-depestad-rj',   meus:['50007'],     topN:3 },
+    'governador-pa': { cod:6259, uf:'pa', cargo:'0003', pstId:'pst-governador-pa', rowsId:'rows-governador-pa', meus:[],            topN:3 },
+    'governador-sp': { cod:6259, uf:'sp', cargo:'0003', pstId:'pst-governador-sp', rowsId:'rows-governador-sp', meus:[],            topN:3 }
+  };
+
+  // Arquivo real do TSE (confirmado com dado de 04/10/2026):
+  //   <BASE>/<cod>/dados/<uf>/<uf>-c<cargo>-e<cod 6 dígitos>-u.json
+  function urlsDoCargo(cfg) {
+    var e = String(cfg.cod); while (e.length < 6) e = '0' + e;
+    return [BASE + '/' + cfg.cod + '/dados/' + cfg.uf + '/' + cfg.uf + '-c' + cfg.cargo + '-e' + e + '-u.json'];
+  }
+
+  // O TSE manda números com vírgula decimal ("49,55"). Candidatos ficam em carg[].agr[].par[].cand[].
+  function num(s) { var v = parseFloat(String(s == null ? '' : s).replace(',', '.')); return isNaN(v) ? 0 : v; }
+  function extrairCands(d) {
+    var out = [];
+    (d.carg || []).forEach(function(cg) {
+      (cg.agr || []).forEach(function(a) {
+        (a.par || []).forEach(function(p) {
+          (p.cand || []).forEach(function(x) {
+            var eleito = x.e === 's' || /eleito/i.test(x.st || '');
+            out.push({ nrVotavel: String(x.n), nm: x.nmu || x.nm || String(x.n), sg: p.sg || '',
+                       vap: parseInt(x.vap, 10) || 0, pvap: num(x.pvapn != null ? x.pvapn : x.pvap), st: eleito ? 'EL' : '' });
+          });
+        });
+      });
+    });
+    return out;
+  }
+
+  // Primeira letra de cada palavra em maiúscula (aceita acentos: ARAÚJO -> Araújo), preposições em minúscula.
+  function cap(s) {
+    return (s||'').toLowerCase().split(' ').map(function(w,i){
+      if (i>0 && (w==='da'||w==='de'||w==='do'||w==='das'||w==='dos'||w==='e')) return w;
+      return w.charAt(0).toUpperCase()+w.slice(1);
+    }).join(' ');
+  }
+
+  function renderRows(cfg, cands, maxPvap) {
+    var el = document.getElementById(cfg.rowsId);
+    if (!cands || !cands.length) { el.innerHTML='<div class="esp">sem dados...</div>'; return; }
+
+    var sorted = cands.slice().sort(function(a,b){ return ((b.vap||0)-(a.vap||0)) || ((parseFloat(b.pvap)||0)-(parseFloat(a.pvap)||0)); });
+    var topSet = {};
+    for (var i=0;i<Math.min(cfg.topN,sorted.length);i++) topSet[String(sorted[i].nrVotavel)]=true;
+
+    var toShow = sorted.slice(0,cfg.topN);
+    for (var j=0;j<cfg.meus.length;j++) {
+      var m=cfg.meus[j];
+      if (!topSet[m]) {
+        for (var k=0;k<sorted.length;k++) { if(String(sorted[k].nrVotavel)===m){toShow.push(sorted[k]);break;} }
+      }
+    }
+
+    var html='';
+    for (var n=0;n<toShow.length;n++) {
+      var c    = toShow[n];
+      var nr   = String(c.nrVotavel);
+      var pvap = parseFloat(c.pvap)||0;
+      var nome = cap(c.nm||c.nomeUrna||nr);
+      var part = (c.sg||c.legenda||'').toUpperCase();
+      var sit  = (c.st||c.e||'').toUpperCase();
+      var isMeu= cfg.meus.indexOf(nr)>=0;
+      var rpos = 0;
+      for (var p=0;p<sorted.length;p++){if(String(sorted[p].nrVotavel)===nr){rpos=p;break;}}
+      var isLdr= rpos===0 && pvap>0;
+      var barW = maxPvap>0?Math.min((pvap/maxPvap)*100,100):0;
+
+      var rowCls = 'crow'+(isMeu?' meu':'');
+      var barCls = 'cbar'+(isLdr?' lead':(isMeu?' minha':''));
+      var pctCls = 'cpct'+(isLdr?' lead':(isMeu?' minha':''));
+      var posCls = rpos===0?'cpos p1':'cpos';
+      var pctTxt = pvap>0?pvap.toFixed(1)+'%':'--';
+
+      var badge='';
+      if (sit==='EL'||sit==='E') badge='<span class="badge b-el">EL</span>';
+      else if(isLdr&&pvap>0)     badge='<span class="badge b-1">1o</span>';
+      if (isMeu)                 badge+='<span class="badge b-meu">meu</span>';
+
+      html += '<div class="'+rowCls+'">'
+            +   '<div class="'+posCls+'">'+(rpos+1)+'o</div>'
+            +   '<div class="cinfo">'
+            +     '<div class="cnome">'+nome+'</div>'
+            +     '<div class="cmeta">'
+            +       '<span class="cpart">'+part+'</span>'
+            +       '<div class="cbar-w"><div class="'+barCls+'" style="width:'+barW.toFixed(1)+'%"></div></div>'
+            +       badge
+            +     '</div>'
+            +   '</div>'
+            +   '<div class="'+pctCls+'">'+pctTxt+'</div>'
+            + '</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function fetchCargo(key,cfg,cb) {
+    var urls = cfg.urlOk ? [cfg.urlOk] : urlsDoCargo(cfg), idx = 0;
+    (function tenta() {
+      if (idx >= urls.length) { cb(false); return; }
+      var url = urls[idx++];
+      var xhr=new XMLHttpRequest();
+      xhr.open('GET',url,true);
+      xhr.onload=function(){
+        if(xhr.status!==200){tenta();return;}
+        try{
+          var d=JSON.parse(xhr.responseText);
+          var cs=extrairCands(d);
+          if(!cs.length){tenta();return;}
+          cfg.urlOk = url;
+          var hg = String(d.hg || ''); if (hg > tseHg) tseHg = hg;
+          var pe=document.getElementById(cfg.pstId);
+          var pst=(d.s&&d.s.pst!=null)?d.s.pst:d.pst;
+          if(pe&&pst!=null) pe.textContent=num(pst).toFixed(1)+'%';
+          var mx=0; for(var i=0;i<cs.length;i++){ if(cs[i].pvap>mx) mx=cs[i].pvap; }
+          renderRows(cfg,cs,mx); cb(true);
+        }catch(e){cb(false);}
+      };
+      xhr.onerror=function(){tenta();};
+      xhr.send();
+    })();
+  }
+
+  var INTERVALO = 30000;
+  var busy=false, proxAt=0, tseHg='', tseHgMostrado='';
+  function fetchAll(){
+    if(busy)return; busy=true;
+    proxAt = Date.now() + INTERVALO;
+    setStatus('live','Buscando TSE...');
+    var keys=Object.keys(CARGOS), done=0, ok=0;
+    keys.forEach(function(k){
+      fetchCargo(k,CARGOS[k],function(s){
+        if(s)ok++; done++;
+        if(done===keys.length){
+          busy=false; updateTime();
+          setStatus(ok>0?'live':'waiting',ok>0?'Em apuracao | 30s':'Aguardando TSE...');
+        }
+      });
+    });
+  }
+
+  function setStatus(st,msg){
+    document.getElementById('status-dot').className='dot '+st;
+    document.getElementById('status-text').textContent=msg;
+  }
+  function updateTime(){
+    var t=new Date();
+    document.getElementById('last-update').textContent='atualizado '+
+      String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0')+':'+String(t.getSeconds()).padStart(2,'0');
+    var th=document.getElementById('tse-hora');
+    if(tseHg){
+      th.textContent='boletim TSE '+tseHg;
+      if(tseHg!==tseHgMostrado && tseHgMostrado!==''){ th.className='novo'; setTimeout(function(){th.className='';},8000); }
+      tseHgMostrado=tseHg;
+    }
+  }
+
+  // Relógio da próxima atualização + barra de progresso (1x por segundo)
+  function relogio(){
+    var el=document.getElementById('next-update'), bar=document.getElementById('prog-bar');
+    if(!started||!proxAt){ el.textContent='próxima atualização: --'; bar.style.width='0%'; return; }
+    if(busy){ el.textContent='atualizando agora...'; el.className='busca'; bar.style.width='100%'; return; }
+    var falta=Math.max(0,Math.ceil((proxAt-Date.now())/1000));
+    el.className='';
+    el.textContent='próxima atualização em '+falta+'s';
+    bar.style.width=Math.min(100,Math.max(0,100*(1-(proxAt-Date.now())/INTERVALO)))+'%';
+  }
+
+  function getTarget(){var t=new Date();t.setHours(17,0,0,0);return t;}
+  var started=false;
+  function tick(){
+    relogio();
+    var diff=getTarget()-new Date();
+    if(diff<=0){
+      try{document.getElementById('countdown-box').hidden=true;}catch(e){}
+      if(!started){
+        started=true;
+        setStatus('live','Iniciada!');
+        fetchAll(); setInterval(fetchAll,30000);
+      }
+    } else {
+      var h=Math.floor(diff/3600000),m=Math.floor((diff%3600000)/60000),s=Math.floor((diff%60000)/1000);
+      document.getElementById('countdown-timer').textContent=
+        String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+    }
+  }
+
+  if(getTarget()-new Date()<=0){
+    started=true;
+    try{document.getElementById('countdown-box').hidden=true;}catch(e){}
+    setStatus('live','Conectando ao TSE...');
+    fetchAll(); setInterval(fetchAll,30000);
+  }
+  setInterval(tick,1000);
+</script>
+
+</body>
+</html>
