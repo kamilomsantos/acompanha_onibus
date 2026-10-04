@@ -293,6 +293,7 @@ var busMarkers = {}, busData = {}, prevPos = {};
 var originLL = null, destLL = null;
 var acTimers = { orig: null, dest: null };
 var acActive = { orig: -1, dest: -1 };
+var apiErrorState = false;
 
 // ─────────────────────────────────────────
 //  Mapa
@@ -621,15 +622,19 @@ function fetchGPS() {
   function tryNext() {
     if (idx >= urls.length) {
       setStatus('err', 'Sem internet');
-      showToast('📶 Sem conexão com a API da SMTR. Verifique sua internet e tente novamente.', 'error', 8000);
-      document.getElementById('bus-list').innerHTML =
-        '<div class="empty" style="color:var(--red)">📶 Sem internet ou API indisponível.<br>Os dados serão atualizados automaticamente quando a conexão voltar.</div>';
+      if (!apiErrorState) {
+        apiErrorState = true;
+        showToast('📶 Sem conexão com a API. Os dados serão atualizados quando a internet voltar.', 'error', 6000);
+        document.getElementById('bus-list').innerHTML =
+          '<div class="empty" style="color:var(--red)">📶 Sem internet ou API indisponível.<br>Os dados serão atualizados automaticamente quando a conexão voltar.</div>';
+      }
       return;
     }
     fetch(urls[idx++])
       .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function(data) {
         var arr   = Array.isArray(data) ? data : (data.gps || data.veiculos || []);
+        if (apiErrorState) { apiErrorState = false; showToast('✅ Conexão restabelecida!', 'ok', 3000); }
         var count = applyBuses(arr);
         var t = new Date();
         document.getElementById('last-upd').textContent =
