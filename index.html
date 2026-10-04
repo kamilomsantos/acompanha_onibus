@@ -392,42 +392,119 @@ function pontoAjustado(tipo, ll) {
   if (estavaAtivo && originLL && destLL) tracarRota(); else render();
 }
 
+// ───────── Numeração de portas (base oficial da Prefeitura do Rio, ArcGIS público) ─────────
+var ARC = 'https://pgeo3.rio.rj.gov.br/arcgis/rest/services/CadLog/';
+var AVISO_VIZINHAS = function(num) { return 'O número ' + num + ' foi estimado pelas portas vizinhas. Arraste o ponto no mapa para ajustar.'; };
+var cachePorta = {};
+
+function arcQuery(servico, params) {
+  var qs = Object.keys(params).map(function(k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
+  return fetch(ARC + servico + '/FeatureServer/0/query?' + qs + '&f=json')
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(j) { if (j.error) throw new Error('arcgis'); return j.features || []; });
+}
+function sqlTxt(s) { return String(s).replace(/'/g, "''"); }
+
+// Procura o número da porta na rua. Devolve {lat, lng, tipo: 'exato'|'vizinhas', cep} ou null.
+function portaOficial(rua, num, ref) {
+  var n = parseInt(num, 10);
+  if (!n || !rua) return Promise.resolve(null);
+  var chave = rua + '|' + n;
+  if (cachePorta[chave] !== undefined) return Promise.resolve(cachePorta[chave]);
+  return arcQuery('Trechos_Logradouros', { where: "UPPER(completo)='" + sqlTxt(rua.toUpperCase()) + "'", outFields: 'cl', returnGeometry: 'false', resultRecordCount: 50 })
+    .then(function(tr) {
+      var cls = [];
+      tr.forEach(function(f) { if (cls.indexOf(f.attributes.cl) < 0) cls.push(f.attributes.cl); });
+      if (!cls.length) return null;
+      var lista = cls.slice(0, 8).map(function(c) { return "'" + sqlTxt(c) + "'"; }).join(',');
+      return arcQuery('Numero_de_porta', { where: 'cl IN (' + lista + ') AND np_int>=' + (n - 30) + ' AND np_int<=' + (n + 30),
+        outFields: 'np_int,cl,cep', returnGeometry: 'true', outSR: 4326, resultRecordCount: 400 })
+        .then(function(ps) {
+          var pts = ps.filter(function(f) { return f.geometry; })
+            .map(function(f) { return { n: f.attributes.np_int, cl: f.attributes.cl, cep: f.attributes.cep, lat: f.geometry.y, lng: f.geometry.x }; });
+          if (!pts.length) return null;
+          function dist(p) { return ref ? Planner.hav(ref.lat, ref.lng, p.lat, p.lng) : 0; }
+          var exatos = pts.filter(function(p) { return p.n === n; }).sort(function(a, b) { return dist(a) - dist(b); });
+          if (exatos.length) return { lat: exatos[0].lat, lng: exatos[0].lng, tipo: 'exato', cep: exatos[0].cep };
+          // sem a porta exata: usa a rua mais perto do ponto de referência e interpola entre as portas vizinhas do mesmo lado
+          var maisPerto = pts.slice().sort(function(a, b) { return dist(a) - dist(b); })[0];
+          var lado = pts.filter(function(p) { return p.cl === maisPerto.cl && p.n % 2 === n % 2; });
+          var lo = null, hi = null;
+          lado.forEach(function(p) {
+            if (p.n < n && (!lo || p.n > lo.n)) lo = p;
+            if (p.n > n && (!hi || p.n < hi.n)) hi = p;
+          });
+          if (lo && hi) {
+            var f = (n - lo.n) / (hi.n - lo.n);
+            return { lat: lo.lat + (hi.lat - lo.lat) * f, lng: lo.lng + (hi.lng - lo.lng) * f, tipo: 'vizinhas', cep: lo.cep };
+          }
+          var um = lo || hi;
+          return um ? { lat: um.lat, lng: um.lng, tipo: 'vizinhas', cep: um.cep } : null;
+        });
+    })
+    .then(function(r) { cachePorta[chave] = r; return r; });
+}
+
 function fetchSuggest(q, drop, inp, name, onSelect) {
   acActive[name] = -1;
   var num = extrairNumero(q);
   fetch(NOM_URL + encodeURIComponent(q + ', Rio de Janeiro'))
     .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(data) {
-      drop.innerHTML = '';
-      if (!data.length) { drop.innerHTML = '<div class="ac-msg">Nenhum resultado</div>'; return; }
-      data.forEach(function(item) {
-        var ad = item.address || {};
-        var main = ad.road || ad.amenity || ad.shop || ad.suburb || ad.neighbourhood || item.display_name.split(',')[0];
-        var sub = [ad.suburb || ad.neighbourhood, ad.city_district, ad.city || 'Rio de Janeiro'].filter(Boolean).join(', ');
-        var aprox = numeroAproximado(item, num);
-        if (item.class === 'highway' && num) main = main + ', ' + num;
-        if (aprox) sub += ' · nº ' + num + ' aproximado (só a rua está no mapa)';
-        var div = document.createElement('div'); div.className = 'ac-item';
-        var ic = document.createElement('span'); ic.className = 'ac-icon'; ic.textContent = placeIcon(item.type || item.class);
-        var box = document.createElement('div');
-        var m = document.createElement('div'); m.className = 'ac-main'; m.textContent = main;
-        var s = document.createElement('div'); s.className = 'ac-sub'; s.textContent = sub;
-        box.appendChild(m); box.appendChild(s); div.appendChild(ic); div.appendChild(box);
-        div.addEventListener('mousedown', function(e) { e.preventDefault(); });
-        div.addEventListener('click', function() {
-          inp.value = main + (ad.suburb ? ', ' + ad.suburb : '');
-          dirty[name] = false;
-          drop.classList.remove('open');
-          onSelect(parseFloat(item.lat), parseFloat(item.lon), main);
-          lembrar(name, inp.value, parseFloat(item.lat), parseFloat(item.lon));
-          if (aprox) showToast(AVISO_NUMERO(num), 'warn', 8000);
-        });
-        drop.appendChild(div);
-      });
+      var rua = null;
+      if (num) data.forEach(function(it) { if (!rua && it.class === 'highway' && it.address && it.address.road) rua = it; });
+      var oficial = rua
+        ? portaOficial(rua.address.road, num, { lat: parseFloat(rua.lat), lng: parseFloat(rua.lon) }).catch(function() { return null; })
+        : Promise.resolve(null);
+      return oficial.then(function(of) { montarSugestoes(drop, inp, name, onSelect, data, num, rua, of); });
     })
     .catch(function() {
       drop.innerHTML = '<div class="ac-msg">Não foi possível buscar sugestões agora.</div>';
     });
+}
+
+function montarSugestoes(drop, inp, name, onSelect, data, num, rua, of) {
+  drop.innerHTML = '';
+  var opcoes = [];
+  if (of && rua) {
+    var a0 = rua.address, bairro0 = a0.suburb || a0.neighbourhood || '';
+    opcoes.push({
+      main: a0.road + ', ' + num, icon: '🏠', lat: of.lat, lon: of.lng, suburb: bairro0,
+      sub: [bairro0, a0.city_district, a0.city || 'Rio de Janeiro'].filter(Boolean).join(', ')
+        + (of.tipo === 'exato' ? ' · ✓ número localizado (base da Prefeitura)' : ' · nº ' + num + ' estimado pelas portas vizinhas'),
+      aviso: of.tipo === 'exato' ? '' : AVISO_VIZINHAS(num)
+    });
+  }
+  data.forEach(function(item) {
+    var ad = item.address || {};
+    if (of && rua && item.class === 'highway' && ad.road === rua.address.road) return;
+    var main = ad.road || ad.amenity || ad.shop || ad.suburb || ad.neighbourhood || item.display_name.split(',')[0];
+    var sub = [ad.suburb || ad.neighbourhood, ad.city_district, ad.city || 'Rio de Janeiro'].filter(Boolean).join(', ');
+    var aprox = numeroAproximado(item, num);
+    if (item.class === 'highway' && num) main = main + ', ' + num;
+    if (aprox) sub += ' · nº ' + num + ' aproximado (só a rua está no mapa)';
+    opcoes.push({ main: main, sub: sub, icon: placeIcon(item.type || item.class), lat: parseFloat(item.lat), lon: parseFloat(item.lon),
+      suburb: ad.suburb, aviso: aprox ? AVISO_NUMERO(num) : '' });
+  });
+  if (!opcoes.length) { drop.innerHTML = '<div class="ac-msg">Nenhum resultado</div>'; return; }
+  opcoes.forEach(function(o) {
+    var div = document.createElement('div'); div.className = 'ac-item';
+    var ic = document.createElement('span'); ic.className = 'ac-icon'; ic.textContent = o.icon;
+    var box = document.createElement('div');
+    var m = document.createElement('div'); m.className = 'ac-main'; m.textContent = o.main;
+    var s = document.createElement('div'); s.className = 'ac-sub'; s.textContent = o.sub;
+    box.appendChild(m); box.appendChild(s); div.appendChild(ic); div.appendChild(box);
+    div.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    div.addEventListener('click', function() {
+      inp.value = o.main + (o.suburb ? ', ' + o.suburb : '');
+      dirty[name] = false;
+      drop.classList.remove('open');
+      onSelect(o.lat, o.lon, o.main);
+      lembrar(name, inp.value, o.lat, o.lon);
+      if (o.aviso) showToast(o.aviso, 'warn', 8000);
+    });
+    drop.appendChild(div);
+  });
 }
 
 // ───────── Favoritos e últimos locais (guardados no aparelho) ─────────
@@ -540,9 +617,19 @@ function geocode(text, cb) {
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (!d.length) { showToast('Local não encontrado: ' + text, 'warn', 4000); return; }
-      cb(parseFloat(d[0].lat), parseFloat(d[0].lon), d[0].display_name.split(',')[0]);
-      var num = extrairNumero(text);
-      if (numeroAproximado(d[0], num)) showToast(AVISO_NUMERO(num), 'warn', 8000);
+      var it = d[0], num = extrairNumero(text), lat = parseFloat(it.lat), lng = parseFloat(it.lon);
+      var oficial = (num && it.class === 'highway' && it.address && it.address.road)
+        ? portaOficial(it.address.road, num, { lat: lat, lng: lng }).catch(function() { return null; })
+        : Promise.resolve(null);
+      return oficial.then(function(of) {
+        if (of) {
+          cb(of.lat, of.lng, it.address.road + ', ' + num);
+          if (of.tipo !== 'exato') showToast(AVISO_VIZINHAS(num), 'warn', 8000);
+          return;
+        }
+        cb(lat, lng, it.display_name.split(',')[0]);
+        if (numeroAproximado(it, num)) showToast(AVISO_NUMERO(num), 'warn', 8000);
+      });
     });
 }
 function tracarRota() {
