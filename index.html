@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Ônibus Rio — Linha 298</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
-<!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -53,35 +52,110 @@ body { display: flex; flex-direction: column; }
 /* ── Search bar ── */
 .search-bar {
   background: var(--surf); border-bottom: 1px solid var(--border);
-  padding: 8px 12px; display: flex; gap: 6px; flex-shrink: 0; z-index: 999;
+  padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;
+  flex-shrink: 0; z-index: 999;
 }
+.search-row { display: flex; gap: 6px; align-items: center; position: relative; }
+.field-wrap { flex: 1; position: relative; }
+
+.search-label {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  font-size: .6rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); pointer-events: none; z-index: 1;
+  background: var(--surf2); padding: 0 3px; transition: all .15s;
+}
+.field-wrap input:not(:placeholder-shown) ~ .search-label,
+.field-wrap input:focus ~ .search-label {
+  top: 0; font-size: .58rem; color: var(--blue);
+}
+
 .search-bar input {
-  flex: 1; background: var(--surf2); border: 1px solid var(--border);
-  color: var(--fg); border-radius: 8px; padding: 7px 10px;
+  width: 100%; background: var(--surf2); border: 1px solid var(--border);
+  color: var(--fg); border-radius: 8px; padding: 8px 10px 8px 48px;
   font-size: .82rem; font-family: 'Inter', sans-serif; outline: none;
   transition: border-color .2s;
 }
 .search-bar input:focus { border-color: var(--blue); }
-.search-bar input::placeholder { color: var(--muted); }
-.btn {
-  background: var(--surf2); border: 1px solid var(--border);
-  color: var(--fg); border-radius: 8px; padding: 7px 12px;
-  font-size: .78rem; font-weight: 600; cursor: pointer; white-space: nowrap;
-  font-family: 'Inter', sans-serif; transition: background .15s;
+.search-bar input::placeholder { color: var(--muted); font-size: .78rem; }
+
+.field-icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .7rem; font-weight: 700; pointer-events: none; z-index: 1;
 }
-.btn:hover { background: var(--border); }
-.btn.primary { background: var(--yellow); color: #000; border-color: var(--yellow); }
-.btn.primary:hover { background: #d97706; border-color: #d97706; }
-.btn.blue { background: var(--blue); color: #000; border-color: var(--blue); font-size: .75rem; }
-.btn.blue:hover { background: #0ea5e9; }
+.field-icon.orig { background: var(--blue); color: #000; }
+.field-icon.dest { background: var(--red); color: #fff; }
+
+/* ── Dropdown autocomplete ── */
+.ac-drop {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--surf); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  z-index: 2000; max-height: 220px; overflow-y: auto;
+  display: none;
+}
+.ac-drop.open { display: block; }
+.ac-item {
+  padding: 9px 12px; cursor: pointer; font-size: .78rem; line-height: 1.4;
+  border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start;
+}
+.ac-item:last-child { border-bottom: none; }
+.ac-item:hover, .ac-item.active { background: var(--surf2); }
+.ac-icon { font-size: .9rem; flex-shrink: 0; margin-top: 1px; }
+.ac-main { font-weight: 600; color: var(--fg); }
+.ac-sub  { font-size: .68rem; color: var(--muted); margin-top: 1px; }
+.ac-loading { padding: 10px 12px; font-size: .75rem; color: var(--muted); text-align: center; }
+.ac-empty   { padding: 10px 12px; font-size: .75rem; color: var(--muted); text-align: center; }
+
+/* separador entre campos */
+.route-line {
+  display: flex; align-items: center; gap: 6px; padding: 0 2px;
+}
+.route-line::before {
+  content: ''; display: block; width: 2px; height: 14px;
+  background: linear-gradient(to bottom, var(--blue), var(--red));
+  border-radius: 2px; margin-left: 11px; flex-shrink: 0;
+}
+.btn-gps {
+  background: none; border: 1px solid var(--border); color: var(--blue);
+  border-radius: 7px; padding: 4px 8px; font-size: .68rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap; font-family: 'Inter', sans-serif;
+  transition: background .15s; flex-shrink: 0;
+}
+.btn-gps:hover { background: var(--surf2); }
+
+.btn-ir {
+  background: var(--yellow); color: #000; border: none;
+  border-radius: 8px; padding: 8px 14px; font-size: .8rem;
+  font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif;
+  transition: background .15s; flex-shrink: 0; align-self: flex-end;
+}
+.btn-ir:hover { background: #d97706; }
 
 /* ── Mapa ── */
 #map { flex: 1; min-height: 0; }
 
+/* ── Toast de aviso ── */
+.toast {
+  position: fixed; bottom: 240px; left: 50%; transform: translateX(-50%);
+  background: #1e293b; border: 1px solid var(--border);
+  color: var(--fg); border-radius: 10px; padding: 10px 16px;
+  font-size: .78rem; max-width: 90vw; text-align: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,.6);
+  z-index: 3000; opacity: 0; pointer-events: none;
+  transition: opacity .25s;
+}
+.toast.show { opacity: 1; }
+.toast.warn  { border-color: var(--yellow); color: var(--yellow); }
+.toast.error { border-color: var(--red);    color: var(--red); }
+.toast.ok    { border-color: var(--green);  color: var(--green); }
+
 /* ── Painel bottom ── */
 .panel {
   background: var(--surf); border-top: 1px solid var(--border);
-  flex-shrink: 0; overflow-y: auto; max-height: 230px;
+  flex-shrink: 0; overflow-y: auto; max-height: 220px;
 }
 .panel-head {
   padding: 7px 14px; background: var(--surf2);
@@ -147,12 +221,34 @@ body { display: flex; flex-direction: column; }
   <div class="dot wait" id="sdot"></div>
 </div>
 
-<!-- BUSCA DE DESTINO -->
+<!-- BUSCA ORIGEM + DESTINO -->
 <div class="search-bar">
-  <input id="dest-input" type="text" placeholder="Para onde? Ex: Tijuca, Maracanã, Norte Shopping...">
-  <button class="btn primary" onclick="geocodeDestino()">Ir</button>
-  <button class="btn blue"    onclick="usarLocalizacao()">&#9679; Minha loc</button>
+  <!-- Origem -->
+  <div class="search-row">
+    <div class="field-wrap">
+      <div class="field-icon orig">A</div>
+      <input id="orig-input" type="text" placeholder="Partindo de... (endereço ou bairro)" autocomplete="off">
+      <div class="ac-drop" id="orig-drop"></div>
+    </div>
+    <button class="btn-gps" onclick="usarLocalizacao()">&#9679; GPS</button>
+  </div>
+
+  <!-- linha visual -->
+  <div class="route-line"></div>
+
+  <!-- Destino -->
+  <div class="search-row">
+    <div class="field-wrap">
+      <div class="field-icon dest">B</div>
+      <input id="dest-input" type="text" placeholder="Destino... (endereço ou bairro)" autocomplete="off">
+      <div class="ac-drop" id="dest-drop"></div>
+    </div>
+    <button class="btn-ir" onclick="traccarRota()">Traçar</button>
+  </div>
 </div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
 
 <!-- MAPA -->
 <div id="map"></div>
@@ -163,26 +259,40 @@ body { display: flex; flex-direction: column; }
     <span>Ônibus mais próximos</span>
     <span id="last-upd">--:--:--</span>
   </div>
-  <div id="bus-list"><div class="empty">Clique em "Minha loc" ou clique no mapa para ver ônibus perto de você.</div></div>
+  <div id="bus-list"><div class="empty">Defina sua origem (GPS ou endereço) para ver os ônibus mais próximos.</div></div>
 </div>
 
 <script>
+// ─────────────────────────────────────────
+//  Toast
+// ─────────────────────────────────────────
+var toastTimer = null;
+function showToast(msg, type, ms) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type||'warn');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { el.classList.remove('show'); }, ms||4000);
+}
+
 // ─────────────────────────────────────────
 //  Config
 // ─────────────────────────────────────────
 var LINHA    = '298';
 var GPS_URL  = 'https://dados.mobilidade.rio/gps/sppo?linha=' + LINHA;
 var GPS_V2   = 'https://dados.mobilidade.rio/sppo/gps?linha=' + LINHA;
-var NOM_URL  = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=';
+var NOM_URL  = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=br&addressdetails=1&q=';
 var INTERVAL = 30000;
 var CENTER   = [-22.9068, -43.1729];
 
 // ─────────────────────────────────────────
 //  Estado
 // ─────────────────────────────────────────
-var map, originMk, destMk;
+var map, originMk, destMk, gmBtn;
 var busMarkers = {}, busData = {}, prevPos = {};
 var originLL = null, destLL = null;
+var acTimers = { orig: null, dest: null };
+var acActive = { orig: -1, dest: -1 };
 
 // ─────────────────────────────────────────
 //  Mapa
@@ -193,7 +303,6 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 }).addTo(map);
 
-// Clique no mapa = define origem
 map.on('click', function(e) { setOrigem(e.latlng.lat, e.latlng.lng, 'ponto no mapa'); });
 
 function mkIcon(html, size) {
@@ -204,7 +313,7 @@ function setOrigem(lat, lng, label) {
   originLL = { lat: lat, lng: lng };
   if (originMk) map.removeLayer(originMk);
   originMk = L.marker([lat, lng], { icon: mkIcon('<div class="origin-dot"></div>', [18,18]), zIndexOffset: 2000 })
-               .addTo(map).bindTooltip('Você — ' + label, { permanent: false, direction: 'top' });
+               .addTo(map).bindTooltip('Origem — ' + label, { permanent: false, direction: 'top' });
   renderLista();
   updateGmapsBtn();
 }
@@ -212,79 +321,207 @@ function setOrigem(lat, lng, label) {
 function setDestino(lat, lng, label) {
   destLL = { lat: lat, lng: lng };
   if (destMk) map.removeLayer(destMk);
-  destMk = L.marker([lat, lng], { icon: mkIcon('<div class="dest-dot">D</div>', [22,22]), zIndexOffset: 2000 })
+  destMk = L.marker([lat, lng], { icon: mkIcon('<div class="dest-dot">B</div>', [22,22]), zIndexOffset: 2000 })
              .addTo(map).bindTooltip('Destino — ' + label, { permanent: false, direction: 'top' });
-  map.fitBounds([[originLL ? originLL.lat : lat, originLL ? originLL.lng : lng],[lat, lng]], { padding: [60,60] });
+  if (originLL) {
+    map.fitBounds([[originLL.lat, originLL.lng],[lat, lng]], { padding: [60,60] });
+  } else {
+    map.setView([lat, lng], 15);
+  }
   updateGmapsBtn();
 }
+
+// ─────────────────────────────────────────
+//  Autocomplete
+// ─────────────────────────────────────────
+function setupAc(inputId, dropId, onSelect) {
+  var inp  = document.getElementById(inputId);
+  var drop = document.getElementById(dropId);
+
+  inp.addEventListener('input', function() {
+    clearTimeout(acTimers[inputId.replace('-input','')]);
+    var q = inp.value.trim();
+    if (q.length < 3) { closeDrop(drop); return; }
+    drop.innerHTML = '<div class="ac-loading">Buscando...</div>';
+    openDrop(drop);
+    acTimers[inputId.replace('-input','')] = setTimeout(function() { fetchSuggest(q, drop, onSelect, inp); }, 400);
+  });
+
+  inp.addEventListener('keydown', function(e) {
+    var items = drop.querySelectorAll('.ac-item');
+    var key   = inputId.indexOf('orig') >= 0 ? 'orig' : 'dest';
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      acActive[key] = Math.min(acActive[key]+1, items.length-1);
+      highlightItem(items, acActive[key]);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      acActive[key] = Math.max(acActive[key]-1, 0);
+      highlightItem(items, acActive[key]);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (acActive[key] >= 0 && items[acActive[key]]) items[acActive[key]].click();
+      else if (inputId === 'dest-input') traccarRota();
+    } else if (e.key === 'Escape') {
+      closeDrop(drop);
+    }
+  });
+
+  inp.addEventListener('blur', function() {
+    setTimeout(function() { closeDrop(drop); }, 200);
+  });
+}
+
+function highlightItem(items, idx) {
+  items.forEach(function(el, i) { el.classList.toggle('active', i === idx); });
+  if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
+}
+
+function openDrop(drop) { drop.classList.add('open'); }
+function closeDrop(drop) { drop.classList.remove('open'); }
+
+function fetchSuggest(q, drop, onSelect, inp) {
+  var query = q + ', Rio de Janeiro';
+  fetch(NOM_URL + encodeURIComponent(query))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || !data.length) {
+        drop.innerHTML = '<div class="ac-empty">Nenhum resultado para "'+q+'"</div>';
+        openDrop(drop);
+        return;
+      }
+      drop.innerHTML = '';
+      data.slice(0,5).forEach(function(item) {
+        var addr = item.address || {};
+        var main = addr.road || addr.suburb || addr.neighbourhood || addr.city_district || item.display_name.split(',')[0];
+        var sub  = [addr.suburb || addr.neighbourhood, addr.city_district, addr.city || 'Rio de Janeiro']
+                   .filter(Boolean).join(', ');
+        var icon = getPlaceIcon(item.type || item.class);
+        var div = document.createElement('div');
+        div.className = 'ac-item';
+        div.innerHTML = '<span class="ac-icon">'+icon+'</span>'
+                       +'<div><div class="ac-main">'+main+'</div><div class="ac-sub">'+sub+'</div></div>';
+        div.addEventListener('mousedown', function(e) { e.preventDefault(); });
+        div.addEventListener('click', function() {
+          inp.value = main + (sub ? ', ' + sub.split(',')[0] : '');
+          closeDrop(drop);
+          onSelect(parseFloat(item.lat), parseFloat(item.lon), main);
+        });
+        drop.appendChild(div);
+      });
+      openDrop(drop);
+    })
+    .catch(function() { closeDrop(drop); });
+}
+
+function getPlaceIcon(type) {
+  var icons = {
+    'bus_stop':'🚌','bus_station':'🚌','subway':'🚇','train_station':'🚆','station':'🚆',
+    'hospital':'🏥','school':'🏫','university':'🎓','college':'🎓',
+    'park':'🌳','beach':'🏖️','stadium':'🏟️','cinema':'🎬',
+    'supermarket':'🛒','mall':'🛍️','shopping':'🛍️','bank':'🏦',
+    'restaurant':'🍽️','fast_food':'🍔','cafe':'☕',
+    'hotel':'🏨','hostel':'🛏️',
+    'fuel':'⛽','parking':'🅿️',
+    'museum':'🏛️','church':'⛪','temple':'🛕',
+    'road':'📍','residential':'🏠','suburb':'📍',
+  };
+  if (!type) return '📍';
+  for (var k in icons) { if (type.toLowerCase().indexOf(k) >= 0) return icons[k]; }
+  return '📍';
+}
+
+// Inicializa autocomplete dos dois campos
+setupAc('orig-input', 'orig-drop', function(lat, lng, label) {
+  setOrigem(lat, lng, label);
+  map.setView([lat, lng], 15);
+  setStatus('live', 'Origem definida');
+});
+
+setupAc('dest-input', 'dest-drop', function(lat, lng, label) {
+  setDestino(lat, lng, label);
+  setStatus('live', 'Destino definido');
+});
 
 // ─────────────────────────────────────────
 //  Geolocalização
 // ─────────────────────────────────────────
 function usarLocalizacao() {
-  setStatus('wait', 'Obtendo localização...');
+  setStatus('wait', 'Obtendo localização GPS...');
   if (!navigator.geolocation) { alert('Geolocalização não suportada neste navegador.'); return; }
   navigator.geolocation.getCurrentPosition(
     function(pos) {
       setOrigem(pos.coords.latitude, pos.coords.longitude, 'GPS');
       map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+      document.getElementById('orig-input').value = 'Minha localização (GPS)';
       setStatus('live', 'Localização obtida');
+      showToast('📍 Localização obtida com sucesso!', 'ok', 3000);
     },
     function(err) {
-      var msgs = { 1: 'Permissão negada. Clique no mapa para definir sua posição.',
-                   2: 'Posição indisponível. Clique no mapa para definir sua posição.',
-                   3: 'Tempo esgotado. Clique no mapa para definir sua posição.' };
-      alert(msgs[err.code] || 'Erro de geolocalização. Clique no mapa para definir sua posição.');
-      setStatus('wait', 'Localização manual — clique no mapa');
+      var msgs = {
+        1: '🔒 Permissão de localização negada. Digite sua origem no campo acima.',
+        2: '📡 Posição indisponível. Digite sua origem no campo acima.',
+        3: '⏱ Tempo esgotado ao obter GPS. Digite sua origem no campo acima.'
+      };
+      showToast(msgs[err.code] || '❌ Erro ao obter localização. Digite sua origem.', 'error', 6000);
+      setStatus('wait', 'GPS indisponível — use o campo Origem');
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
   );
 }
 
 // ─────────────────────────────────────────
-//  Geocodificação (Nominatim)
+//  Traçar rota (geocoda campos manualmente)
 // ─────────────────────────────────────────
-function geocodeDestino() {
-  var q = document.getElementById('dest-input').value.trim();
-  if (!q) return;
-  var query = q + ' Rio de Janeiro';
-  setStatus('wait', 'Buscando destino...');
-  fetch(NOM_URL + encodeURIComponent(query))
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data || !data.length) { alert('Endereço não encontrado. Tente ser mais específico.'); return; }
-      var r = data[0];
-      setDestino(parseFloat(r.lat), parseFloat(r.lon), r.display_name.split(',').slice(0,2).join(','));
-      setStatus('live', 'Destino definido');
-    })
-    .catch(function() { alert('Erro ao buscar endereço. Verifique sua conexão.'); setStatus('err', 'Erro'); });
+function traccarRota() {
+  var orig = document.getElementById('orig-input').value.trim();
+  var dest = document.getElementById('dest-input').value.trim();
+  var tasks = [];
+  if (orig && orig !== 'Minha localização (GPS)' && !originLL) {
+    tasks.push(geocodeField(orig + ' Rio de Janeiro', function(lat, lng, label) {
+      setOrigem(lat, lng, label);
+    }));
+  }
+  if (dest && !destLL) {
+    tasks.push(geocodeField(dest + ' Rio de Janeiro', function(lat, lng, label) {
+      setDestino(lat, lng, label);
+    }));
+  }
+  if (!tasks.length && originLL && destLL) { updateGmapsBtn(); return; }
+  Promise.all(tasks).then(function() { updateGmapsBtn(); }).catch(function() {});
 }
 
-document.getElementById('dest-input').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') geocodeDestino();
-});
+function geocodeField(query, callback) {
+  return fetch(NOM_URL + encodeURIComponent(query))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.length) {
+        callback(parseFloat(data[0].lat), parseFloat(data[0].lon), data[0].display_name.split(',')[0]);
+      }
+    });
+}
 
 // ─────────────────────────────────────────
 //  Botão Google Maps
 // ─────────────────────────────────────────
-var gmBtn = null;
 function updateGmapsBtn() {
   if (!originLL) return;
   var panel = document.querySelector('.panel-head');
   if (!gmBtn) {
     gmBtn = document.createElement('a');
-    gmBtn.className = 'btn blue';
-    gmBtn.style.cssText = 'font-size:.58rem;padding:3px 7px;text-decoration:none;display:inline-block;';
+    gmBtn.className = 'btn-gps';
+    gmBtn.style.cssText = 'font-size:.58rem;padding:3px 7px;text-decoration:none;display:inline-block;color:var(--blue);';
     gmBtn.target = '_blank';
-    gmBtn.textContent = 'Rotas no Maps';
+    gmBtn.textContent = 'Abrir no Maps';
     panel.appendChild(gmBtn);
   }
   var orig = originLL.lat + ',' + originLL.lng;
   var dest = destLL ? (destLL.lat + ',' + destLL.lng) : '';
-  gmBtn.href = 'https://www.google.com/maps/dir/?api=1' +
-    '&origin=' + orig +
-    (dest ? '&destination=' + dest : '') +
-    '&travelmode=transit';
+  gmBtn.href = 'https://www.google.com/maps/dir/?api=1'
+    + '&origin=' + orig
+    + (dest ? '&destination=' + dest : '')
+    + '&travelmode=transit';
 }
 
 // ─────────────────────────────────────────
@@ -295,13 +532,11 @@ function hav(la1, lo1, la2, lo2) {
   var a = Math.sin(d1/2)*Math.sin(d1/2) + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(d2/2)*Math.sin(d2/2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
-
 function fmtDist(km) { return km < 1 ? Math.round(km*1000)+'m' : km.toFixed(1)+'km'; }
 function fmtEta(km, spd) {
   if (!spd || spd < 2) return '';
   var min = Math.round((km / spd) * 60);
-  if (min < 1) return ' · chegando';
-  return ' · ~'+min+'min';
+  return min < 1 ? ' · chegando' : ' · ~'+min+'min';
 }
 
 // ─────────────────────────────────────────
@@ -311,10 +546,8 @@ function renderLista() {
   var list = document.getElementById('bus-list');
   var buses = Object.values(busData);
   if (!buses.length) {
-    list.innerHTML = '<div class="empty">Nenhum ônibus ativo na linha 298 agora.</div>';
-    return;
+    list.innerHTML = '<div class="empty">Nenhum ônibus ativo na linha 298 agora.</div>'; return;
   }
-
   buses.forEach(function(b) {
     var lat = parseFloat(b.latitude), lng = parseFloat(b.longitude);
     b._dist = originLL ? hav(originLL.lat, originLL.lng, lat, lng) : null;
@@ -325,44 +558,29 @@ function renderLista() {
       b._away     = b._dist > pd + 0.02;
     } else { b._approach = false; b._away = false; }
   });
-
   buses.sort(function(a, c) {
     if (a._dist !== null && c._dist !== null) return a._dist - c._dist;
     if (a._dist !== null) return -1; if (c._dist !== null) return 1; return 0;
   });
-
-  // destaque marcador mais próximo
   var nearKey = buses[0] ? buses[0].ordem : null;
   Object.keys(busMarkers).forEach(function(k) {
     var el = busMarkers[k].getElement();
-    if (el) {
-      var div = el.querySelector('.bmarker');
-      if (div) div.className = 'bmarker' + (k === nearKey && originLL ? ' nearest-bus' : '');
-    }
+    if (el) { var div = el.querySelector('.bmarker'); if (div) div.className = 'bmarker' + (k===nearKey&&originLL?' nearest-bus':''); }
   });
-
   var html = '';
-  buses.slice(0, 8).forEach(function(b, i) {
+  buses.slice(0,8).forEach(function(b, i) {
     var spd    = parseInt(b.velocidade) || 0;
     var ordem  = String(b.ordem);
     var dTxt   = b._dist !== null ? fmtDist(b._dist) : '--';
     var eta    = b._dist !== null ? fmtEta(b._dist, spd) : '';
-    var dirTxt = b._approach ? 'Aproximando' + eta : (b._away ? 'Afastando' : (originLL ? 'Calculando...' : 'Marque sua posicão no mapa'));
+    var dirTxt = b._approach ? 'Aproximando'+eta : (b._away ? 'Afastando' : (originLL ? 'Calculando...' : 'Defina sua origem'));
     var badge  = b._approach ? '<span class="badge b-aprox">aprox.</span>' : (b._away ? '<span class="badge b-longe">afastando</span>' : '');
     var age    = '';
     try { var p = (b.dataHora||'').split(' '); if (p[1]) age = p[1].slice(0,5); } catch(e){}
-
-    html += '<div class="brow' + (i===0&&originLL?' nearest':'') + '">'
-          +   '<div class="bid">'+ordem.slice(-5)+'</div>'
-          +   '<div class="binfo">'
-          +     '<div class="bdist">'+dTxt+' '+badge+'</div>'
-          +     '<div class="bdir">'+dirTxt+'</div>'
-          +   '</div>'
-          +   '<div>'
-          +     '<div class="bspd">'+spd+' km/h</div>'
-          +     '<div style="font-size:.6rem;color:var(--muted);font-family:\'JetBrains Mono\',monospace;text-align:right">'+age+'</div>'
-          +   '</div>'
-          + '</div>';
+    html += '<div class="brow'+(i===0&&originLL?' nearest':'')+'"><div class="bid">'+ordem.slice(-5)+'</div>'
+          + '<div class="binfo"><div class="bdist">'+dTxt+' '+badge+'</div><div class="bdir">'+dirTxt+'</div></div>'
+          + '<div><div class="bspd">'+spd+' km/h</div>'
+          + '<div style="font-size:.6rem;color:var(--muted);font-family:\'JetBrains Mono\',monospace;text-align:right">'+age+'</div></div></div>';
   });
   list.innerHTML = html;
 }
@@ -379,9 +597,7 @@ function applyBuses(arr) {
     var key = b.ordem || (lat+','+lng);
     b.ordem = String(key);
     now[key] = b;
-    if (busData[key]) {
-      prevPos[key] = { lat: parseFloat(busData[key].latitude), lng: parseFloat(busData[key].longitude) };
-    }
+    if (busData[key]) prevPos[key] = { lat: parseFloat(busData[key].latitude), lng: parseFloat(busData[key].longitude) };
     if (busMarkers[key]) {
       busMarkers[key].setLatLng([lat, lng]);
       busMarkers[key].setPopupContent('<b>Ônibus '+key+'</b><br>Vel: '+(b.velocidade||'--')+' km/h<br>'+b.dataHora);
@@ -401,30 +617,29 @@ function applyBuses(arr) {
 
 function fetchGPS() {
   setStatus('wait', 'Atualizando...');
-  var urls = [GPS_URL, GPS_V2];
-  var idx  = 0;
+  var urls = [GPS_URL, GPS_V2], idx = 0;
   function tryNext() {
     if (idx >= urls.length) {
-      setStatus('err', 'API indisponível');
+      setStatus('err', 'Sem internet');
+      showToast('📶 Sem conexão com a API da SMTR. Verifique sua internet e tente novamente.', 'error', 8000);
       document.getElementById('bus-list').innerHTML =
-        '<div class="err-msg">Não foi possível acessar a API da SMTR (dados.mobilidade.rio).<br>' +
-        'Verifique se está conectado à internet e recarregue a página.</div>';
+        '<div class="empty" style="color:var(--red)">📶 Sem internet ou API indisponível.<br>Os dados serão atualizados automaticamente quando a conexão voltar.</div>';
       return;
     }
     fetch(urls[idx++])
       .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function(data) {
-        var arr = Array.isArray(data) ? data : (data.gps || data.veiculos || []);
+        var arr   = Array.isArray(data) ? data : (data.gps || data.veiculos || []);
         var count = applyBuses(arr);
         var t = new Date();
         document.getElementById('last-upd').textContent =
           String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0')+':'+String(t.getSeconds()).padStart(2,'0');
-        document.getElementById('counter').textContent = count + (count===1?' ônibus':' ônibus');
+        document.getElementById('counter').textContent  = count + ' ônibus';
         document.getElementById('title-txt').textContent = 'Linha 298' + (count>0?' — '+count+' ativos':' — Sem dados');
         setStatus(count>0?'live':'wait', count>0?'Ao vivo':'Sem ônibus ativos');
         renderLista();
         if (count > 0 && !originLL) {
-          var pts = Object.values(busMarkers).map(function(m){return m.getLatLng();});
+          var pts = Object.values(busMarkers).map(function(m){ return m.getLatLng(); });
           try { map.fitBounds(L.latLngBounds(pts), {padding:[50,50], maxZoom:14}); } catch(e){}
         }
       })
