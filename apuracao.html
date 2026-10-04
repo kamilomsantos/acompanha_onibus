@@ -66,6 +66,19 @@
   #status-text { font-size: .72rem; color: var(--fg-muted); flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   #last-update { font-size: .68rem; color: var(--fg-muted); flex-shrink: 0; }
 
+  /* ── Barra geral da apuração (Brasil, pelo Presidente) ── */
+  #geral { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px 9px; margin-bottom: 8px; }
+  #geral .g-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  #geral .g-tit { font-size: .62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-muted); }
+  #geral .g-pcts { font-family: 'JetBrains Mono', monospace; font-size: .8rem; color: var(--fg-muted); }
+  #geral .g-pcts b { font-weight: 700; }
+  #geral #g-ap { color: var(--green); }
+  #geral #g-rest { color: var(--yellow); }
+  #geral .g-barra { height: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  #geral #g-barra-ap { height: 100%; width: 0%; background: var(--green); border-radius: 5px 0 0 5px; transition: width .8s; }
+  #geral .g-base { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: .66rem; color: var(--fg-muted); }
+  #geral .g-base b { color: var(--fg); font-weight: 600; }
+
   /* ── Relógio de atualização ── */
   #timer-row {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -210,6 +223,19 @@
   <span id="last-update"></span>
 </div>
 
+<div id="geral">
+  <div class="g-topo">
+    <span class="g-tit">Apuração geral · Brasil (Presidente)</span>
+    <span class="g-pcts"><b id="g-ap">--</b> apurado · <b id="g-rest">--</b> restante</span>
+  </div>
+  <div class="g-barra"><div id="g-barra-ap"></div></div>
+  <div class="g-base">
+    <span><b id="g-votos">--</b> votos apurados</span>
+    <span><b id="g-secoes">--</b> seções</span>
+    <span>eleitorado apurado: <b id="g-eleit">--</b></span>
+  </div>
+</div>
+
 <div id="timer-row">
   <span id="next-update">próxima atualização: --</span>
   <span id="tse-hora"></span>
@@ -308,6 +334,18 @@
   }
 
   // O TSE manda números com vírgula decimal ("49,55"). Candidatos ficam em carg[].agr[].par[].cand[].
+  function fmtInt(v) { var n = parseInt(v, 10); return isNaN(n) ? '--' : n.toLocaleString('pt-BR'); }
+  // Barra geral: % de seções apuradas (e o que falta), total de votos, seções e eleitorado apurado
+  function atualizarGeral(d) {
+    var s = d.s || {}, v = d.v || {}, e = d.e || {};
+    var ap = Math.min(100, Math.max(0, num(s.pstn != null ? s.pstn : s.pst)));
+    document.getElementById('g-ap').textContent = ap.toFixed(2) + '%';
+    document.getElementById('g-rest').textContent = (100 - ap).toFixed(2) + '%';
+    document.getElementById('g-barra-ap').style.width = ap + '%';
+    document.getElementById('g-votos').textContent = fmtInt(v.tv);
+    document.getElementById('g-secoes').textContent = fmtInt(s.st) + ' de ' + fmtInt(s.ts);
+    document.getElementById('g-eleit').textContent = fmtInt(e.est) + ' de ' + fmtInt(e.te);
+  }
   function num(s) { var v = parseFloat(String(s == null ? '' : s).replace(',', '.')); return isNaN(v) ? 0 : v; }
   function extrairCands(d) {
     var out = [];
@@ -409,6 +447,7 @@
           var pst=(d.s&&d.s.pst!=null)?d.s.pst:d.pst;
           if(pe&&pst!=null) pe.textContent=num(pst).toFixed(2)+'%';
           var mx=0; for(var i=0;i<cs.length;i++){ if(cs[i].pvap>mx) mx=cs[i].pvap; }
+          if (key === 'presidente') atualizarGeral(d);
           renderRows(cfg,cs,mx); cb(true);
         }catch(e){cb(false);}
       };
