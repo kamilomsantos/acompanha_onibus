@@ -4,36 +4,50 @@ on:
   push:
     branches: [master]
   schedule:
-    - cron: '2-57/5 * * * *'
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: gps
   cancel-in-progress: true
 
+env:
+  CICLO_MIN: '1'
+  INTERVALO_S: '30'
+
 jobs:
   coletar:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 58
     steps:
       - uses: actions/checkout@v4
 
-      - name: Coletar GPS da SMTR
-        run: node coletar.js gps.json
-
-      - name: Publicar na branch dados (sem histórico)
+      - name: Coletar GPS da SMTR repetidamente e publicar na branch dados
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir out
-          cp gps.json out/
-          cd out
+          mkdir -p out && cd out
           git init -q -b dados
           git config user.name "gps-bot"
           git config user.email "gps-bot@users.noreply.github.com"
-          git add gps.json
-          git commit -q -m "gps $(date -u +%FT%TZ)"
-          git push -q -f "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" dados
+          fim=$(( $(date +%s) + CICLO_MIN * 60 ))
+          while [ "$(date +%s)" -lt "$fim" ]; do
+            if node ../coletar.js gps.json; then
+              git add gps.json
+              git commit -q --amend -m "gps $(date -u +%FT%TZ)" 2>/dev/null || git commit -q -m "gps $(date -u +%FT%TZ)"
+              git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" dados || echo "push falhou"
+            else
+              echo "coleta falhou"
+            fi
+            sleep "$INTERVALO_S"
+          done
+
+      - name: Disparar o próximo ciclo
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run gps.yml --repo "$GITHUB_REPOSITORY" --ref master
