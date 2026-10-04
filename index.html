@@ -312,16 +312,18 @@ function setOrigem(lat, lng, label) {
   planActive = false; tripLayer.clearLayers();
   originLL = { lat:lat, lng:lng };
   if (originMk) map.removeLayer(originMk);
-  originMk = L.marker([lat,lng], { icon: mkIcon('<div class="origin-dot"></div>',18,18), zIndexOffset:2000 })
-    .addTo(map).bindTooltip('Origem — ' + label, { direction:'top' });
+  originMk = L.marker([lat,lng], { icon: mkIcon('<div class="origin-dot"></div>',18,18), zIndexOffset:2000, draggable:true })
+    .addTo(map).bindTooltip('Origem — ' + label, { direction:'top' })
+    .on('dragend', function(e) { pontoAjustado('orig', e.target.getLatLng()); });
   render(); updateGmaps(); atualizarEstrelas();
 }
 function setDestino(lat, lng, label) {
   planActive = false; tripLayer.clearLayers();
   destLL = { lat:lat, lng:lng };
   if (destMk) map.removeLayer(destMk);
-  destMk = L.marker([lat,lng], { icon: mkIcon('<div class="dest-dot">B</div>',22,22), zIndexOffset:2000 })
-    .addTo(map).bindTooltip('Destino — ' + label, { direction:'top' });
+  destMk = L.marker([lat,lng], { icon: mkIcon('<div class="dest-dot">B</div>',22,22), zIndexOffset:2000, draggable:true })
+    .addTo(map).bindTooltip('Destino — ' + label, { direction:'top' })
+    .on('dragend', function(e) { pontoAjustado('dest', e.target.getLatLng()); });
   if (originLL) map.fitBounds([[originLL.lat,originLL.lng],[lat,lng]], { padding:[60,60] });
   else map.setView([lat,lng], 15);
   render(); updateGmaps(); atualizarEstrelas();
@@ -368,8 +370,31 @@ function hl(items, idx) {
   if (items[idx]) items[idx].scrollIntoView({ block:'nearest' });
 }
 
+// Número da casa digitado no fim do endereço ("Rua X, 147", "Av. Y 500", "Rua Z, nº 12, Bairro").
+function extrairNumero(t) {
+  var m = String(t).match(/(?:^|[\s,])(?:n[ºo°.]*\s*)?(\d{1,5}[A-Za-z]?)(?=\s*(?:,|$))/i);
+  return m ? m[1] : '';
+}
+// O mapa (OpenStreetMap) muitas vezes só tem a rua, sem o número: nesse caso o ponto é aproximado.
+function numeroAproximado(item, num) {
+  return !!num && item.class === 'highway' && !(item.address && item.address.house_number);
+}
+var AVISO_NUMERO = function(num) { return 'O número ' + num + ' não está no mapa: usei a rua. Arraste o ponto no mapa (ou toque nele) para ajustar.'; };
+
+// Ponto movido à mão no mapa (arrastar o marcador A ou B).
+function pontoAjustado(tipo, ll) {
+  var estavaAtivo = planActive;
+  if (tipo === 'orig') originLL = { lat: ll.lat, lng: ll.lng }; else destLL = { lat: ll.lat, lng: ll.lng };
+  dirty[tipo] = false;
+  lembrar(tipo, $(tipo + '-input').value, ll.lat, ll.lng);
+  atualizarEstrelas(); updateGmaps();
+  showToast('📍 Ponto ' + (tipo === 'orig' ? 'A' : 'B') + ' ajustado no mapa', 'ok', 2500);
+  if (estavaAtivo && originLL && destLL) tracarRota(); else render();
+}
+
 function fetchSuggest(q, drop, inp, name, onSelect) {
   acActive[name] = -1;
+  var num = extrairNumero(q);
   fetch(NOM_URL + encodeURIComponent(q + ', Rio de Janeiro'))
     .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(data) {
@@ -379,6 +404,9 @@ function fetchSuggest(q, drop, inp, name, onSelect) {
         var ad = item.address || {};
         var main = ad.road || ad.amenity || ad.shop || ad.suburb || ad.neighbourhood || item.display_name.split(',')[0];
         var sub = [ad.suburb || ad.neighbourhood, ad.city_district, ad.city || 'Rio de Janeiro'].filter(Boolean).join(', ');
+        var aprox = numeroAproximado(item, num);
+        if (item.class === 'highway' && num) main = main + ', ' + num;
+        if (aprox) sub += ' · nº ' + num + ' aproximado (só a rua está no mapa)';
         var div = document.createElement('div'); div.className = 'ac-item';
         var ic = document.createElement('span'); ic.className = 'ac-icon'; ic.textContent = placeIcon(item.type || item.class);
         var box = document.createElement('div');
@@ -392,6 +420,7 @@ function fetchSuggest(q, drop, inp, name, onSelect) {
           drop.classList.remove('open');
           onSelect(parseFloat(item.lat), parseFloat(item.lon), main);
           lembrar(name, inp.value, parseFloat(item.lat), parseFloat(item.lon));
+          if (aprox) showToast(AVISO_NUMERO(num), 'warn', 8000);
         });
         drop.appendChild(div);
       });
@@ -509,7 +538,12 @@ $('btn-gps').addEventListener('click', function() {
 function geocode(text, cb) {
   return fetch(NOM_URL + encodeURIComponent(text + ', Rio de Janeiro'))
     .then(function(r) { return r.json(); })
-    .then(function(d) { if (d.length) cb(parseFloat(d[0].lat), parseFloat(d[0].lon), d[0].display_name.split(',')[0]); else showToast('Local não encontrado: ' + text, 'warn', 4000); });
+    .then(function(d) {
+      if (!d.length) { showToast('Local não encontrado: ' + text, 'warn', 4000); return; }
+      cb(parseFloat(d[0].lat), parseFloat(d[0].lon), d[0].display_name.split(',')[0]);
+      var num = extrairNumero(text);
+      if (numeroAproximado(d[0], num)) showToast(AVISO_NUMERO(num), 'warn', 8000);
+    });
 }
 function tracarRota() {
   if (planBusy) return;
