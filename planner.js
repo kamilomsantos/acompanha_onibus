@@ -153,7 +153,7 @@
         if (idade > (opt.maxAge || 25)) return;
         var falta = useT ? Math.max(0, tAt(sh, sa.along) - tAt(sh, o.along)) : (sa.along - o.along) / vMpm;
         var w = Math.max(0, falta - idade);
-        if (w >= walkA * 0.9 && w <= maxWait) waits.push({ w: w, b: o.b });
+        if (w >= walkA * 0.9 && w <= maxWait) waits.push({ w: w, b: o.b, along: o.along });
       });
       if (!waits.length) return;
       waits.sort(function (x, y) { return x.w - y.w; });

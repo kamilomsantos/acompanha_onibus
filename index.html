@@ -396,7 +396,7 @@ function renderTrips() {
   list.innerHTML = '';
   var note = document.createElement('div'); note.className = 'tnote';
   note.textContent = 'Atualizado às ' + hhmm(new Date()) + ' · dados dos ônibus de ' + String(dataUpdated || '').slice(11, 16)
-    + ' · estimativa pela grade horária das linhas (linhas diretas, sem baldeação).';
+    + ' · estimativa pela grade horária das linhas (linhas diretas, sem baldeação). No mapa: azul = sua viagem, laranja tracejado = ônibus até o ponto de embarque.';
   list.appendChild(note);
   var idade = dataUpdated ? Math.round((Date.now() - Planner.rioMs(dataUpdated)) / 60000) : null;
   if (idade !== null && idade > 15) {
@@ -434,10 +434,16 @@ function selectTrip(i, fit) {
   tripLayer.addLayer(L.marker([sa[1], sa[2]], { icon: mkIcon('<div class="stopmk" style="background:#22C55E"></div>', 14, 14) }).bindTooltip('Embarque: ' + sa[0]));
   tripLayer.addLayer(L.marker([sb[1], sb[2]], { icon: mkIcon('<div class="stopmk" style="background:#F87171"></div>', 14, 14) }).bindTooltip('Desembarque: ' + sb[0]));
   t.buses.forEach(function(x) {
+    var aprox = Planner.slice(sh, x.along, t.stopAll.along);
+    aprox.unshift([x.b.lat, x.b.lng]);
+    aprox.push([sa[1], sa[2]]);
+    tripLayer.addLayer(L.polyline(aprox, { color:'#F59E0B', weight:4, opacity:.95, dashArray:'4 9', lineCap:'round' }));
     tripLayer.addLayer(L.marker([x.b.lat, x.b.lng], { icon: mkIcon('<div class="waitmk">' + Math.max(1, Math.round(x.w)) + ' min</div>', 44, 22), zIndexOffset: 800 })
       .bindTooltip('Linha ' + t.svc + ' · ' + x.b.id));
   });
-  var all = pts.concat(t.buses.map(function(x) { return [x.b.lat, x.b.lng]; }));
+  var all = pts.slice();
+  var prox = t.buses[0];
+  if (prox) all = all.concat(Planner.slice(sh, prox.along, t.stopAll.along), [[prox.b.lat, prox.b.lng]]);
   if (fit && all.length) map.fitBounds(L.latLngBounds(all), { padding:[50,50], maxZoom:16 });
 }
 
