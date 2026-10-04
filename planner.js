@@ -185,6 +185,50 @@
     return out;
   }
 
-  var api = { hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
+  // Todas as linhas com parada perto de um ponto, com os próximos ônibus de cada uma.
+  function linhasNoPonto(data, buses, P, now, opt) {
+    opt = opt || {};
+    var maxD = opt.maxDist || 500, vMpm = (opt.vKmh || 15) * 1000 / 60;
+    var live = {}, best = {};
+    buses.forEach(function (b) { (live[b.s] = live[b.s] || []).push(b); });
+    if (!data.bySvc) {
+      data.bySvc = {};
+      Object.keys(data.shapes).forEach(function (id) { var s = data.shapes[id]; (data.bySvc[s.r] = data.bySvc[s.r] || []).push(s); });
+    }
+    Object.keys(data.shapes).forEach(function (sid) {
+      var sh = data.shapes[sid], sp = null;
+      sh.s.forEach(function (st) {
+        var s = data.stops[st[0]], d = hav(P.lat, P.lng, s[1], s[2]);
+        if (d <= maxD && (!sp || d < sp.d)) sp = { d: d, i: st[0], along: st[1] };
+      });
+      if (!sp) return;
+      var key = sh.r + '|' + sh.d;
+      if (best[key] && best[key].dist <= sp.d) return;
+      prep(sh);
+      var lv = live[sh.r], waits = [], useT = temGrade(sh);
+      if (lv) busesOnShape(sh, lv, 150, data.bySvc[sh.r]).forEach(function (o) {
+        if (o.along > sp.along + 30) return;
+        var idade = ageMin(o.b.t, now);
+        if (idade > (opt.maxAge || 25)) return;
+        var falta = useT ? Math.max(0, tAt(sh, sp.along) - tAt(sh, o.along)) : (sp.along - o.along) / vMpm;
+        var w = Math.max(0, falta - idade);
+        if (w <= (opt.maxWait || 90)) waits.push({ w: w, b: o.b, along: o.along });
+      });
+      waits.sort(function (x, y) { return x.w - y.w; });
+      var st0 = data.stops[sp.i];
+      best[key] = {
+        svc: sh.r, sid: sid, dir: sh.d, head: sh.h, stop: st0[0], stopLL: [st0[1], st0[2]],
+        dist: Math.round(sp.d), stopAll: sp, emCirculacao: !!lv,
+        waits: waits.slice(0, 3).map(function (x) { return Math.max(1, Math.round(x.w)); }),
+        buses: waits.slice(0, 3)
+      };
+    });
+    return Object.keys(best).map(function (k) { return best[k]; }).sort(function (a, b) {
+      var wa = a.waits.length ? a.waits[0] : 1e6, wb = b.waits.length ? b.waits[0] : 1e6;
+      return wa !== wb ? wa - wb : a.dist - b.dist;
+    });
+  }
+
+  var api = { linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Planner = api;
 })(typeof window !== 'undefined' ? window : this);

@@ -104,11 +104,24 @@ body { display:flex; flex-direction:column; }
 .tsub b { color:var(--green); }
 .tnote { padding:7px 14px; font-size:.62rem; color:var(--muted); border-bottom:1px solid var(--border); line-height:1.4; }
 #side { display:contents; }
-.topbar { order:1; } .search-bar { order:2; } #map { order:3; } .panel { order:4; }
+.topbar { order:1; } .search-bar { order:2; } #map { order:3; } .tabs { order:4; } .panel { order:5; }
+.tabs { display:flex; background:var(--surf); border-top:1px solid var(--border); flex-shrink:0; z-index:5; }
+.tabs button { flex:1; background:none; border:none; border-bottom:3px solid transparent; color:var(--muted); font-family:'Inter',sans-serif; font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:10px 0 8px; cursor:pointer; }
+.tabs button.on { color:var(--yellow); border-bottom-color:var(--yellow); }
+.refpick { display:inline-flex; gap:4px; margin-left:6px; vertical-align:middle; }
+.refpick button { background:var(--surf2); border:1px solid var(--border); color:var(--fg); border-radius:6px; font-size:.64rem; font-weight:700; padding:1px 8px; cursor:pointer; }
+.refpick button.on { background:var(--yellow); color:#000; border-color:var(--yellow); }
+.lrow { padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer; }
+.lrow:last-child { border-bottom:none; }
+.lrow:hover { background:var(--surf2); }
+.lrow.sel { background:var(--gdim); box-shadow:inset 3px 0 0 var(--green); }
+.lrow .trip-top .ttot { color:var(--green); font-weight:700; font-size:.82rem; }
+.lrow .ttot.off { color:var(--muted); font-weight:400; font-size:.7rem; }
 @media (min-width:800px) {
   body { flex-direction:row; }
   #side { display:flex; flex-direction:column; width:400px; flex-shrink:0; height:100%; border-right:1px solid var(--border); background:var(--surf); }
-  .topbar, .search-bar, #map, .panel { order:0; }
+  .topbar, .search-bar, #map, .tabs, .panel { order:0; }
+  .tabs { border-top:none; border-bottom:1px solid var(--border); }
   .panel { flex:1; min-height:0; max-height:none; border-top:none; }
   #map { flex:1; height:100%; }
   .toast { bottom:24px; left:calc(50% + 200px); }
@@ -175,6 +188,11 @@ body { display:flex; flex-direction:column; }
       <input id="line-input" type="text" placeholder="Filtrar linhas (ex: 298, 413) — vazio = ônibus perto de você" autocomplete="off">
     </div>
   </div>
+</div>
+
+<div class="tabs" id="tabs">
+  <button type="button" class="on" data-tab="dir">Direções</button>
+  <button type="button" data-tab="lin">Linhas</button>
 </div>
 
 <div class="panel" id="panel">
@@ -392,6 +410,7 @@ function tracarRota() {
       return Promise.all([carregar(true), ensureLinhas()]).then(function() {
         if (!tripData) return;
         planActive = true;
+        if (tab === 'lin') setTab('dir');
         calcularViagens(true);
         updateGmaps();
         map.fitBounds([[originLL.lat, originLL.lng], [destLL.lat, destLL.lng]], { padding:[60,60] });
@@ -487,25 +506,129 @@ function selectTrip(i, fit) {
   var sa = tripData.stops[t.stopAll.i], sb = tripData.stops[t.stopBll.i];
   tripLayer.addLayer(L.marker([sa[1], sa[2]], { icon: mkIcon('<div class="stopmk" style="background:#22C55E"></div>', 14, 14) }).bindTooltip('Embarque: ' + sa[0]));
   tripLayer.addLayer(L.marker([sb[1], sb[2]], { icon: mkIcon('<div class="stopmk" style="background:#F87171"></div>', 14, 14) }).bindTooltip('Desembarque: ' + sb[0]));
-  // do ônibus mais perto do ponto para o mais longe; cada trecho vai até o ônibus da frente (sem sobreposição)
-  var ord = t.buses.slice().sort(function(a, b) { return b.along - a.along; });
-  var prevAlong = t.stopAll.along, prevLL = [sa[1], sa[2]];
+  var all = pts.concat(drawApproach(sh, t.stopAll.along, [sa[1], sa[2]], t.buses, t.svc));
+  if (fit && all.length) map.fitBounds(L.latLngBounds(all), { padding:[50,50], maxZoom:16 });
+}
+
+// Tracejado laranja do(s) ônibus até o ponto + marcador "🚌 linha · N min". Devolve os pontos do ônibus mais próximo (para enquadrar o mapa).
+// Do ônibus mais perto do ponto para o mais longe; cada trecho vai só até o ônibus da frente (sem sobreposição).
+function drawApproach(sh, stopAlong, stopLL, busesArr, svc) {
+  var ord = busesArr.slice().sort(function(a, b) { return b.along - a.along; });
+  var prevAlong = stopAlong, prevLL = stopLL, fitPts = [];
   ord.forEach(function(x, k) {
     var seg = Planner.slice(sh, x.along, prevAlong);
     seg.unshift([x.b.lat, x.b.lng]);
     seg.push(prevLL);
     tripLayer.addLayer(L.polyline(seg, { color:'#F59E0B', weight:4, opacity: k === 0 ? .95 : .6, dashArray:'4 9', lineCap:'round' }));
+    if (k === 0) fitPts = seg.slice();
     prevAlong = x.along; prevLL = [x.b.lat, x.b.lng];
   });
   ord.forEach(function(x) {
-    var rot = esc(t.svc) + ' · ' + Math.max(1, Math.round(x.w)) + ' min';
-    tripLayer.addLayer(L.marker([x.b.lat, x.b.lng], { icon: mkIcon('<div class="waitmk">🚌 ' + rot + '</div>', 92, 24), zIndexOffset: 900 })
-      .bindTooltip('Linha ' + t.svc + ' · ' + x.b.id + ' · chega ao ponto em ' + Math.max(1, Math.round(x.w)) + ' min'));
+    var min = Math.max(1, Math.round(x.w));
+    tripLayer.addLayer(L.marker([x.b.lat, x.b.lng], { icon: mkIcon('<div class="waitmk">🚌 ' + esc(svc) + ' · ' + min + ' min</div>', 92, 24), zIndexOffset: 900 })
+      .bindTooltip('Linha ' + svc + ' · ' + x.b.id + ' · chega ao ponto em ' + min + ' min'));
   });
-  var all = pts.slice();
-  var prox = t.buses[0];
-  if (prox) all = all.concat(Planner.slice(sh, prox.along, t.stopAll.along), [[prox.b.lat, prox.b.lng]]);
-  if (fit && all.length) map.fitBounds(L.latLngBounds(all), { padding:[50,50], maxZoom:16 });
+  return fitPts;
+}
+
+// ───────── Aba Linhas (todas as linhas com parada perto do ponto) ─────────
+var tab = 'dir', linhasRef = 'A', linhaSelKey = null, linhasList = [];
+
+function setTab(nome) {
+  tab = nome;
+  [].forEach.call(document.querySelectorAll('#tabs button'), function(b) { b.classList.toggle('on', b.getAttribute('data-tab') === nome); });
+  tripLayer.clearLayers();
+  linhaSelKey = null;
+  $('panel').classList.remove('min');
+  if (nome === 'lin') ensureLinhas().then(renderLinhas);
+  else if (planActive) renderTrips();
+  else render();
+}
+document.querySelectorAll('#tabs button').forEach(function(b) {
+  b.addEventListener('click', function() { setTab(b.getAttribute('data-tab')); });
+});
+
+function refLinhas() {
+  if (linhasRef === 'B' && destLL) return destLL;
+  if (linhasRef === 'A' && originLL) return originLL;
+  return originLL || destLL;
+}
+
+function renderLinhas() {
+  var list = $('bus-list');
+  $('chips').hidden = true;
+  busLayer.clearLayers();
+  $('panel-title').textContent = 'Linhas no ponto';
+  var ref = refLinhas();
+  if (!ref) {
+    $('counter').textContent = buses.length + ' no Rio';
+    list.innerHTML = '<div class="empty">Defina a origem (A) ou o destino (B) para ver as linhas que passam perto.</div>';
+    updatePanelSum();
+    return;
+  }
+  if (!tripData) { list.innerHTML = '<div class="empty">Carregando traçados das linhas...</div>'; return; }
+  var qual = (ref === destLL) ? 'B' : 'A';
+  linhasList = Planner.linhasNoPonto(tripData, buses, ref, Date.now());
+  var vis = filterLines.length ? linhasList.filter(function(l) { return filterLines.indexOf(normLine(l.svc)) >= 0; }) : linhasList;
+  $('counter').textContent = vis.length + (vis.length === 1 ? ' linha' : ' linhas');
+  list.innerHTML = '';
+
+  var note = document.createElement('div'); note.className = 'tnote';
+  note.appendChild(document.createTextNode('Linhas com parada a até 500 m do ponto ' + qual + ' · dados de ' + String(dataUpdated || '').slice(11, 16) + ' · tempos pela grade horária (estimativa).'));
+  if (originLL && destLL) {
+    var pick = document.createElement('span'); pick.className = 'refpick';
+    ['A', 'B'].forEach(function(k) {
+      var bt = document.createElement('button'); bt.type = 'button'; bt.textContent = k;
+      if (k === qual) bt.className = 'on';
+      bt.addEventListener('click', function(e) { e.stopPropagation(); linhasRef = k; linhaSelKey = null; tripLayer.clearLayers(); renderLinhas(); });
+      pick.appendChild(bt);
+    });
+    note.appendChild(pick);
+  }
+  list.appendChild(note);
+
+  if (!vis.length) {
+    var e = document.createElement('div'); e.className = 'empty';
+    e.textContent = filterLines.length ? 'Nenhuma linha do filtro tem parada a até 500 m deste ponto.' : 'Nenhuma linha tem parada a até 500 m deste ponto.';
+    list.appendChild(e);
+    return;
+  }
+  var selItem = null;
+  vis.slice(0, 80).forEach(function(l) {
+    var key = l.svc + '|' + l.dir, sel = key === linhaSelKey;
+    if (sel) selItem = l;
+    var div = document.createElement('div'); div.className = 'lrow' + (sel ? ' sel' : '');
+    var quando = l.waits.length ? '<span class="ttot">em ' + l.waits[0] + ' min</span>'
+      : '<span class="ttot off">' + (l.emCirculacao ? 'nenhum ônibus a caminho' : 'sem ônibus agora') + '</span>';
+    div.innerHTML = '<div class="trip-top"><span class="tline">' + esc(l.svc) + '</span><span class="thead">→ ' + esc(l.head) + '</span>' + quando + '</div>'
+      + '<div class="tsub">' + esc(l.stop) + ' · ' + l.dist + ' m a pé' + (l.waits.length > 1 ? ' · depois <b>' + l.waits.slice(1).join(', ') + ' min</b>' : '') + '</div>';
+    div.addEventListener('click', function() {
+      linhaSelKey = key;
+      if (celular()) $('panel').classList.add('min');
+      renderLinhas();
+      setTimeout(function() { map.invalidateSize(); desenharLinha(l, true); }, 90);
+    });
+    list.appendChild(div);
+  });
+  if (selItem) desenharLinha(selItem, false); else tripLayer.clearLayers();
+  var panelSum = $('panel-sum'), p = $('panel');
+  if (selItem) { panelSum.textContent = selItem.svc + ' → ' + selItem.head + (selItem.waits.length ? ' · em ' + selItem.waits[0] + ' min' : ''); p.classList.add('has-sum'); }
+  else p.classList.remove('has-sum');
+}
+
+function desenharLinha(l, fit) {
+  tripLayer.clearLayers();
+  var sh = tripData.shapes[l.sid];
+  Planner.prep(sh);
+  var pts = [];
+  for (var i = 0; i < sh.n; i++) pts.push([sh.p[2 * i], sh.p[2 * i + 1]]);
+  tripLayer.addLayer(L.polyline(pts, { color:'#38BDF8', weight:4, opacity:.6 }));
+  tripLayer.addLayer(L.marker(l.stopLL, { icon: mkIcon('<div class="stopmk" style="background:#22C55E"></div>', 14, 14) }).bindTooltip('Parada: ' + l.stop));
+  var fp = drawApproach(sh, l.stopAll.along, l.stopLL, l.buses, l.svc);
+  if (fit) {
+    var all = fp.length ? fp : [l.stopLL];
+    map.fitBounds(L.latLngBounds(all), { padding:[60,60], maxZoom:16 });
+  }
 }
 
 // ───────── Minimizar painéis ─────────
@@ -539,6 +662,7 @@ function updatePanelSum() {
 // ───────── Filtro de linhas ─────────
 $('line-input').addEventListener('input', function() {
   filterLines = this.value.split(/[\s,;]+/).map(normLine).filter(Boolean);
+  if (tab === 'lin') { renderLinhas(); return; }
   if (planActive) { calcularViagens(true); return; }
   render();
 });
@@ -547,6 +671,7 @@ $('line-input').addEventListener('input', function() {
 function referencia() { return originLL || destLL; }
 
 function render() {
+  if (tab === 'lin') { renderLinhas(); return; }
   if (planActive) { renderTrips(); return; }
   tripLayer.clearLayers();
   updatePanelSum();
@@ -646,7 +771,7 @@ function carregar(forcar) {
       dataUpdated = j.updated;
       if (apiErrorState) { apiErrorState = false; showToast('✅ Dados atualizados', 'ok', 2500); }
       showFreshness();
-      if (planActive) calcularViagens(); else render();
+      if (tab === 'lin') renderLinhas(); else if (planActive) calcularViagens(); else render();
     })
     .catch(function(e) {
       var msg;

@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CICLO_MIN: '1'
-  INTERVALO_S: '30'
+  CICLO_MIN: '50'
+  INTERVALO_S: '120'
 
 jobs:
   coletar:
