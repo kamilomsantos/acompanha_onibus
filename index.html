@@ -280,6 +280,14 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 .search-bar.min { padding-bottom:6px; }
 .panel.min { box-shadow:0 -2px 12px rgba(0,0,0,.2); }
 @media (max-width:799px) { .panel { max-height:32vh; } #map { margin-bottom:0; border-radius:22px 22px 0 0; } .panel { margin-top:-18px; position:relative; z-index:6; } }
+
+/* ───────── Abas compactas, no alto (acima de origem/destino) ───────── */
+.tabs { background:transparent; padding:2px 14px 6px; gap:8px; border:none; }
+.tabs button { flex-direction:row; justify-content:center; gap:6px; height:36px; padding:0 8px; border-radius:999px; background:var(--surf2); font-size:.78rem; }
+.tabs button svg { width:18px; height:18px; padding:0; border-radius:0; background:none !important; }
+.tabs button.on { background:var(--ydim); color:var(--accent); }
+.topbar { order:1; } .tabs { order:2; } .search-bar { order:3; } #map { order:4; } .panel { order:5; }
+@media (min-width:800px) { .topbar, .tabs, .search-bar, #map, .panel { order:0; } .tabs { border:none; border-radius:0; } }
 </style>
 </head>
 <body>
@@ -296,6 +304,12 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
   <button type="button" class="btn-tema" id="btn-tema" aria-label="Escolher tema" aria-haspopup="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
 </div>
 <div class="menu-tema" id="menu-tema" hidden><button type="button" data-tema="auto">🌗 Automático (do aparelho)<span class="ck">✓</span></button><button type="button" data-tema="light">☀️ Claro<span class="ck">✓</span></button><button type="button" data-tema="dark">🌙 Escuro<span class="ck">✓</span></button></div>
+
+<div class="tabs" id="tabs">
+  <button type="button" class="on" data-tab="dir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8z"/></svg>Direções</button>
+  <button type="button" data-tab="lin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><path d="M4 11h16M8 21v-2M16 21v-2"/><circle cx="8" cy="14" r=".5"/><circle cx="16" cy="14" r=".5"/></svg>Linhas</button>
+  <button type="button" data-tab="rec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>Recorrentes</button>
+</div>
 
 <div class="search-bar" id="search-bar">
   <div class="search-top" id="search-top">
@@ -333,11 +347,7 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
   </div>
 </div>
 
-<div class="tabs" id="tabs">
-  <button type="button" class="on" data-tab="dir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8z"/></svg>Direções</button>
-  <button type="button" data-tab="lin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><path d="M4 11h16M8 21v-2M16 21v-2"/><circle cx="8" cy="14" r=".5"/><circle cx="16" cy="14" r=".5"/></svg>Linhas</button>
-  <button type="button" data-tab="rec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>Recorrentes</button>
-</div>
+
 
 <div class="panel" id="panel">
   <div class="panel-head" id="panel-head">
