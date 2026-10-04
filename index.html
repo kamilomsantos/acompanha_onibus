@@ -391,8 +391,8 @@ function tracarRota() {
       // cada clique busca de novo os dados dos ônibus
       return Promise.all([carregar(true), ensureLinhas()]).then(function() {
         if (!tripData) return;
-        planActive = true; tripSel = -1;
-        calcularViagens();
+        planActive = true;
+        calcularViagens(true);
         updateGmaps();
         map.fitBounds([[originLL.lat, originLL.lng], [destLL.lat, destLL.lng]], { padding:[60,60] });
       });
@@ -414,11 +414,22 @@ function ensureLinhas() {
 
 function hhmm(d) { return d.toLocaleTimeString('pt-BR', { timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit' }); }
 
-function calcularViagens() {
+var tripSelKey = null;
+function tripKey(t) { return t.svc + '|' + t.dir; }
+
+// novo = true: cálculo iniciado pelo usuário (Traçar ou mudança do filtro); false: atualização automática
+function calcularViagens(novo) {
   if (!tripData || !originLL || !destLL) return;
   tripPlan = Planner.plan(tripData, buses, originLL, destLL, Date.now());
-  if (tripSel >= tripPlan.length) tripSel = -1;
+  if (filterLines.length) tripPlan = tripPlan.filter(function(t) { return filterLines.indexOf(normLine(t.svc)) >= 0; });
+  if (novo) tripSelKey = (filterLines.length && tripPlan.length) ? tripKey(tripPlan[0]) : null;
+  tripSel = -1;
+  if (tripSelKey) tripPlan.forEach(function(t, i) { if (tripKey(t) === tripSelKey) tripSel = i; });
   renderTrips();
+  if (novo && tripSel >= 0) {
+    if (celular()) $('panel').classList.add('min');
+    setTimeout(function() { map.invalidateSize(); selectTrip(tripSel, true); }, 90);
+  }
 }
 
 function renderTrips() {
@@ -440,7 +451,9 @@ function renderTrips() {
   }
   if (!tripPlan.length) {
     var e = document.createElement('div'); e.className = 'empty';
-    e.textContent = buses.length ? 'Nenhuma linha direta com ônibus a caminho entre A e B agora. Toque em "Rotas no Google Maps" para opções com baldeação.' : 'Sem dados dos ônibus no momento.';
+    e.textContent = !buses.length ? 'Sem dados dos ônibus no momento.'
+      : filterLines.length ? 'A linha ' + filterLines.join(', ') + ' não tem ônibus a caminho de A para B agora (ou não passa perto dos dois pontos). Apague o filtro de linhas para ver as outras.'
+      : 'Nenhuma linha direta com ônibus a caminho entre A e B agora. Toque em "Rotas no Google Maps" para opções com baldeação.';
     list.appendChild(e);
     tripLayer.clearLayers();
     updatePanelSum();
@@ -453,7 +466,7 @@ function renderTrips() {
       + '<div class="tsub">Ônibus chega ao ponto em <b>' + t.waits.join(', ') + ' min</b> · ' + esc(t.stopA) + ' <span>(' + t.walkAm + ' m a pé)</span></div>'
       + '<div class="tsub">Desça em ' + esc(t.stopB) + ' <span>(' + t.walkBm + ' m até B)</span> · viagem ~' + t.ride + ' min</div>';
     div.addEventListener('click', function() {
-      tripSel = i;
+      tripSel = i; tripSelKey = tripKey(t);
       if (celular()) $('panel').classList.add('min');
       renderTrips();
       setTimeout(function() { map.invalidateSize(); selectTrip(i, true); }, 90);
@@ -525,8 +538,8 @@ function updatePanelSum() {
 
 // ───────── Filtro de linhas ─────────
 $('line-input').addEventListener('input', function() {
-  planActive = false;
   filterLines = this.value.split(/[\s,;]+/).map(normLine).filter(Boolean);
+  if (planActive) { calcularViagens(true); return; }
   render();
 });
 
