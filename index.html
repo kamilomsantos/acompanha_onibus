@@ -742,7 +742,7 @@ function renderTrips() {
   list.innerHTML = '';
   var note = document.createElement('div'); note.className = 'tnote';
   note.textContent = 'Atualizado às ' + hhmm(new Date()) + ' · dados dos ônibus de ' + String(dataUpdated || '').slice(11, 16)
-    + ' · estimativa pela grade horária das linhas (linhas diretas; baldeação só quando não há direta ou poupa 10 min ou mais). No mapa: azul = sua viagem, vermelho tracejado = ônibus até o ponto de embarque.';
+    + ' · estimativa pela grade horária das linhas (linhas diretas; baldeação só quando não há direta ou poupa 10 min ou mais). No mapa: azul = sua viagem, vermelho tracejado = ônibus até o ponto de embarque, pontilhado preto = trecho a pé.';
   list.appendChild(note);
   var idade = dataUpdated ? Math.round((Date.now() - Planner.rioMs(dataUpdated)) / 60000) : null;
   if (idade !== null && idade > 15) {
@@ -812,6 +812,14 @@ function renderTripGroups(list) {
   secao(nPerto > 0 ? 'Mais opções (paradas mais distantes)' : 'Opções com paradas mais distantes', nPerto, tripPlan.length, 4);
 }
 
+// Trecho a pé: pontilhado preto (com contorno branco para aparecer sobre o mapa)
+function walkLine(de, para) {
+  if (!de || !para) return;
+  var pts = [[de[0], de[1]], [para[0], para[1]]];
+  tripLayer.addLayer(L.polyline(pts, { color:'#FFFFFF', weight:6, opacity:.85, lineCap:'round' }));
+  tripLayer.addLayer(L.polyline(pts, { color:'#000000', weight:3, opacity:1, dashArray:'1 7', lineCap:'round' }));
+}
+
 function legHTML(L1, tipo) {
   return '<span class="tline' + (L1.modal === 'B' ? ' brt' : '') + '">' + esc(L1.svc) + '</span> ';
 }
@@ -850,7 +858,8 @@ function selectBald(i, fit) {
   if (p2.length > 1) tripLayer.addLayer(L.polyline(p2, { color:'#A78BFA', weight:5, opacity:.9 }));
   function pt(id, cor, txt) { var s = tripData.stops[id]; tripLayer.addLayer(L.marker([s[1], s[2]], { icon: mkIcon('<div class="stopmk" style="background:' + cor + '"></div>', 14, 14) }).bindTooltip(txt + ': ' + s[0])); }
   pt(b.x.stopAll.i, '#22C55E', 'Embarque'); pt(b.x.stopTll.i, '#FACC15', 'Troca (desça do ' + b.x.svc + ')'); pt(b.y.stopTll.i, '#FACC15', 'Troca (suba no ' + b.y.svc + ')'); pt(b.y.stopBll.i, '#F87171', 'Desembarque');
-  var saLL = tripData.stops[b.x.stopAll.i], tLL = tripData.stops[b.y.stopTll.i];
+  var saLL = tripData.stops[b.x.stopAll.i], tLL = tripData.stops[b.y.stopTll.i], xtLL = tripData.stops[b.x.stopTll.i], sbLL = tripData.stops[b.y.stopBll.i];
+  walkLine([originLL.lat, originLL.lng], [saLL[1], saLL[2]]); walkLine([xtLL[1], xtLL[2]], [tLL[1], tLL[2]]); walkLine([sbLL[1], sbLL[2]], [destLL.lat, destLL.lng]);
   var all = p1.concat(p2, drawApproach(shX, b.x.stopAll.along, [saLL[1], saLL[2]], b.x.buses, b.x.svc), drawApproach(shY, b.y.stopTll.along, [tLL[1], tLL[2]], b.y.buses.slice(0, 1), b.y.svc));
   if (fit && all.length) map.fitBounds(L.latLngBounds(all), { padding:[50,50], maxZoom:16 });
 }
@@ -865,6 +874,7 @@ function selectTrip(i, fit) {
   var sa = tripData.stops[t.stopAll.i], sb = tripData.stops[t.stopBll.i];
   tripLayer.addLayer(L.marker([sa[1], sa[2]], { icon: mkIcon('<div class="stopmk" style="background:#22C55E"></div>', 14, 14) }).bindTooltip('Embarque: ' + sa[0]));
   tripLayer.addLayer(L.marker([sb[1], sb[2]], { icon: mkIcon('<div class="stopmk" style="background:#F87171"></div>', 14, 14) }).bindTooltip('Desembarque: ' + sb[0]));
+  walkLine([originLL.lat, originLL.lng], [sa[1], sa[2]]); walkLine([sb[1], sb[2]], [destLL.lat, destLL.lng]);
   var all = pts.concat(drawApproach(sh, t.stopAll.along, [sa[1], sa[2]], t.buses, t.svc));
   if (fit && all.length) map.fitBounds(L.latLngBounds(all), { padding:[50,50], maxZoom:16 });
 }
