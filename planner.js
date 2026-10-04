@@ -121,10 +121,7 @@
     var live = {};
     buses.forEach(function (b) { (live[b.s] = live[b.s] || []).push(b); });
     var best = {};
-    if (!data.bySvc) {
-      data.bySvc = {};
-      Object.keys(data.shapes).forEach(function (id) { var s = data.shapes[id]; (data.bySvc[s.r] = data.bySvc[s.r] || []).push(s); });
-    }
+    ensureBySvc(data);
 
     Object.keys(data.shapes).forEach(function (sid) {
       var sh = data.shapes[sid], lv = live[sh.r];
@@ -185,25 +182,34 @@
     return out;
   }
 
-  // Todas as linhas com parada perto de um ponto, com os próximos ônibus de cada uma.
+  function ensureBySvc(data) {
+    if (data.bySvc) return;
+    data.bySvc = {};
+    Object.keys(data.shapes).forEach(function (id) {
+      var s = data.shapes[id];
+      s.sid = id;
+      (data.bySvc[s.r] = data.bySvc[s.r] || []).push(s);
+    });
+  }
+
+  // Todas as linhas com parada perto de um ponto (nos dois sentidos), com os próximos ônibus de cada uma.
   function linhasNoPonto(data, buses, P, now, opt) {
     opt = opt || {};
     var maxD = opt.maxDist || 500, vMpm = (opt.vKmh || 15) * 1000 / 60;
     var live = {}, best = {};
     buses.forEach(function (b) { (live[b.s] = live[b.s] || []).push(b); });
-    if (!data.bySvc) {
-      data.bySvc = {};
-      Object.keys(data.shapes).forEach(function (id) { var s = data.shapes[id]; (data.bySvc[s.r] = data.bySvc[s.r] || []).push(s); });
-    }
-    Object.keys(data.shapes).forEach(function (sid) {
-      var sh = data.shapes[sid], sp = null;
+    var maxOutro = opt.maxOutroSentido || 1000;
+    ensureBySvc(data);
+
+    function paradaMaisPerto(sh, lim) {
+      var sp = null;
       sh.s.forEach(function (st) {
         var s = data.stops[st[0]], d = hav(P.lat, P.lng, s[1], s[2]);
-        if (d <= maxD && (!sp || d < sp.d)) sp = { d: d, i: st[0], along: st[1] };
+        if (d <= lim && (!sp || d < sp.d)) sp = { d: d, i: st[0], along: st[1] };
       });
-      if (!sp) return;
-      var key = sh.r + '|' + sh.d;
-      if (best[key] && best[key].dist <= sp.d) return;
+      return sp;
+    }
+    function montar(sh, sp, longe) {
       prep(sh);
       var lv = live[sh.r], waits = [], useT = temGrade(sh);
       if (lv) busesOnShape(sh, lv, 150, data.bySvc[sh.r]).forEach(function (o) {
@@ -216,13 +222,37 @@
       });
       waits.sort(function (x, y) { return x.w - y.w; });
       var st0 = data.stops[sp.i];
-      best[key] = {
-        svc: sh.r, sid: sid, dir: sh.d, head: sh.h, stop: st0[0], stopLL: [st0[1], st0[2]],
-        dist: Math.round(sp.d), stopAll: sp, emCirculacao: !!lv,
+      return {
+        svc: sh.r, sid: sh.sid, dir: sh.d, head: sh.h, stop: st0[0], stopLL: [st0[1], st0[2]],
+        dist: Math.round(sp.d), stopAll: sp, emCirculacao: !!lv, longe: !!longe,
         waits: waits.slice(0, 3).map(function (x) { return Math.max(1, Math.round(x.w)); }),
         buses: waits.slice(0, 3)
       };
+    }
+
+    // 1ª passada: sentidos com parada dentro do raio
+    var achados = {};
+    Object.keys(data.shapes).forEach(function (sid) {
+      var sh = data.shapes[sid], sp = paradaMaisPerto(sh, maxD);
+      if (!sp) return;
+      var key = sh.r + '|' + sh.d;
+      if (achados[key] && achados[key].sp.d <= sp.d) return;
+      achados[key] = { sh: sh, sp: sp };
     });
+    // 2ª passada: o outro sentido das mesmas linhas, mesmo que a parada seja mais longe
+    var svcs = {};
+    Object.keys(achados).forEach(function (k) { svcs[achados[k].sh.r] = true; });
+    Object.keys(svcs).forEach(function (svc) {
+      data.bySvc[svc].forEach(function (sh) {
+        var key = svc + '|' + sh.d;
+        if (achados[key] && !achados[key].longe) return;
+        var sp = paradaMaisPerto(sh, maxOutro);
+        if (!sp) return;
+        if (achados[key] && achados[key].sp.d <= sp.d) return;
+        achados[key] = { sh: sh, sp: sp, longe: true };
+      });
+    });
+    Object.keys(achados).forEach(function (k) { best[k] = montar(achados[k].sh, achados[k].sp, achados[k].sp.d > maxD); });
     return Object.keys(best).map(function (k) { return best[k]; }).sort(function (a, b) {
       var wa = a.waits.length ? a.waits[0] : 1e6, wb = b.waits.length ? b.waits[0] : 1e6;
       return wa !== wb ? wa - wb : a.dist - b.dist;
