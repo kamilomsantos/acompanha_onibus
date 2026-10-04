@@ -374,7 +374,7 @@ function ensureLinhas() {
   showToast('Carregando traçados das linhas...', 'warn', 3000);
   return fetch('linhas.json')
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function(j) { tripData = j; })
+    .then(function(j) { tripData = j; $('toast').classList.remove('show'); })
     .catch(function() { showToast('Não foi possível carregar os traçados das linhas.', 'error', 6000); });
 }
 
