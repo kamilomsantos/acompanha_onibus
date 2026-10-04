@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Ônibus Rio ao Vivo</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -16,6 +17,7 @@
   color-scheme: dark;
 }
 *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+[hidden] { display:none !important; }
 html, body { height:100%; background:var(--bg); color:var(--fg); font-family:'Inter',system-ui,sans-serif; overflow:hidden; }
 body { display:flex; flex-direction:column; }
 
@@ -89,6 +91,20 @@ body { display:flex; flex-direction:column; }
 .b-longe { background:var(--ydim); color:var(--yellow); }
 .empty { padding:16px; text-align:center; font-size:.78rem; color:var(--muted); line-height:1.6; }
 
+.trip { padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer; }
+.trip:last-child { border-bottom:none; }
+.trip:hover { background:var(--surf2); }
+.trip.sel { background:var(--gdim); box-shadow:inset 3px 0 0 var(--green); }
+.trip-top { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.tline { font-family:'JetBrains Mono',monospace; font-size:.9rem; font-weight:800; background:var(--yellow); color:#000; padding:1px 8px; border-radius:6px; }
+.thead { font-size:.74rem; color:var(--muted); flex:1; min-width:0; }
+.ttot { font-size:.78rem; text-align:right; }
+.ttot b { font-size:.95rem; }
+.tsub { font-size:.72rem; color:var(--muted); margin-top:4px; line-height:1.45; }
+.tsub b { color:var(--green); }
+.tnote { padding:7px 14px; font-size:.62rem; color:var(--muted); border-bottom:1px solid var(--border); line-height:1.4; }
+.waitmk { min-width:26px; height:22px; padding:0 5px; border-radius:11px; background:var(--green); color:#000; border:2px solid #fff; font-family:'JetBrains Mono',monospace; font-size:.62rem; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.6); white-space:nowrap; }
+.stopmk { width:14px; height:14px; border-radius:50%; border:3px solid #fff; box-shadow:0 1px 6px rgba(0,0,0,.6); }
 .bmarker { min-width:34px; height:24px; padding:0 5px; border-radius:12px; background:var(--yellow); border:2px solid #000; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:.64rem; font-weight:700; color:#000; box-shadow:0 2px 8px rgba(0,0,0,.6); white-space:nowrap; }
 .bmarker.nearest-bus { background:var(--green); border-color:#fff; }
 .origin-dot { width:18px; height:18px; border-radius:50%; background:var(--blue); border:3px solid #fff; box-shadow:0 0 0 5px rgba(56,189,248,.3), 0 2px 8px rgba(0,0,0,.4); }
@@ -144,6 +160,7 @@ body { display:flex; flex-direction:column; }
   <div id="bus-list"><div class="empty">Defina a origem (GPS, endereço ou toque no mapa) para ver os ônibus perto de você.</div></div>
 </div>
 
+<script src="planner.js"></script>
 <script>
 // ───────── Config ─────────
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
@@ -159,6 +176,7 @@ var originLL = null, destLL = null;
 var dirty = { orig: false, dest: false };
 var buses = [], prevPos = {}, dataUpdated = null, apiErrorState = false;
 var filterLines = [];
+var tripData = null, tripPlan = [], planActive = false, tripSel = -1, tripLayer = null, planBusy = false;
 
 // ───────── Utilidades ─────────
 function $(id) { return document.getElementById(id); }
@@ -194,6 +212,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 }).addTo(map);
 busLayer = L.layerGroup().addTo(map);
+tripLayer = L.layerGroup().addTo(map);
 map.on('click', function(e) {
   setOrigem(e.latlng.lat, e.latlng.lng, 'ponto no mapa');
   $('orig-input').value = 'Ponto no mapa'; dirty.orig = false;
@@ -202,6 +221,7 @@ map.on('click', function(e) {
 function mkIcon(html, w, h) { return L.divIcon({ className:'', html:html, iconSize:[w,h], iconAnchor:[w/2,h/2] }); }
 
 function setOrigem(lat, lng, label) {
+  planActive = false; tripLayer.clearLayers();
   originLL = { lat:lat, lng:lng };
   if (originMk) map.removeLayer(originMk);
   originMk = L.marker([lat,lng], { icon: mkIcon('<div class="origin-dot"></div>',18,18), zIndexOffset:2000 })
@@ -209,6 +229,7 @@ function setOrigem(lat, lng, label) {
   render(); updateGmaps();
 }
 function setDestino(lat, lng, label) {
+  planActive = false; tripLayer.clearLayers();
   destLL = { lat:lat, lng:lng };
   if (destMk) map.removeLayer(destMk);
   destMk = L.marker([lat,lng], { icon: mkIcon('<div class="dest-dot">B</div>',22,22), zIndexOffset:2000 })
@@ -324,16 +345,105 @@ function geocode(text, cb) {
     .then(function(d) { if (d.length) cb(parseFloat(d[0].lat), parseFloat(d[0].lon), d[0].display_name.split(',')[0]); else showToast('Local não encontrado: ' + text, 'warn', 4000); });
 }
 function tracarRota() {
+  if (planBusy) return;
   var o = $('orig-input').value.trim(), d = $('dest-input').value.trim(), tasks = [];
+  planBusy = true;
+  $('btn-tracar').textContent = 'Buscando...';
   if (o && dirty.orig) tasks.push(geocode(o, function(la, ln, lb) { dirty.orig = false; setOrigem(la, ln, lb); }));
   if (d && dirty.dest) tasks.push(geocode(d, function(la, ln, lb) { dirty.dest = false; setDestino(la, ln, lb); }));
-  Promise.all(tasks).catch(function() { showToast('Não foi possível buscar o endereço agora.', 'error', 5000); });
-  if (!tasks.length) { render(); updateGmaps(); }
+  Promise.all(tasks)
+    .then(function() {
+      if (!originLL || !destLL) { showToast('Defina a origem (A) e o destino (B) para ver as viagens.', 'warn', 4000); return; }
+      // cada clique busca de novo os dados dos ônibus
+      return Promise.all([carregar(true), ensureLinhas()]).then(function() {
+        if (!tripData) return;
+        planActive = true; tripSel = -1;
+        calcularViagens();
+        updateGmaps();
+        map.fitBounds([[originLL.lat, originLL.lng], [destLL.lat, destLL.lng]], { padding:[60,60] });
+      });
+    })
+    .catch(function() { showToast('Não foi possível buscar agora. Verifique a internet.', 'error', 5000); })
+    .then(function() { planBusy = false; $('btn-tracar').textContent = 'Traçar'; });
 }
 $('btn-tracar').addEventListener('click', tracarRota);
 
+// ───────── Viagens (traçados oficiais GTFS + ônibus ao vivo) ─────────
+function ensureLinhas() {
+  if (tripData) return Promise.resolve();
+  showToast('Carregando traçados das linhas...', 'warn', 3000);
+  return fetch('linhas.json')
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(j) { tripData = j; })
+    .catch(function() { showToast('Não foi possível carregar os traçados das linhas.', 'error', 6000); });
+}
+
+function hhmm(d) { return d.toLocaleTimeString('pt-BR', { timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit' }); }
+
+function calcularViagens() {
+  if (!tripData || !originLL || !destLL) return;
+  tripPlan = Planner.plan(tripData, buses, originLL, destLL, Date.now());
+  if (tripSel >= tripPlan.length) tripSel = -1;
+  renderTrips();
+}
+
+function renderTrips() {
+  var list = $('bus-list');
+  $('chips').hidden = true;
+  busLayer.clearLayers();
+  $('panel-title').textContent = 'Viagens de A para B';
+  $('counter').textContent = tripPlan.length + (tripPlan.length === 1 ? ' linha' : ' linhas');
+  list.innerHTML = '';
+  var note = document.createElement('div'); note.className = 'tnote';
+  note.textContent = 'Atualizado às ' + hhmm(new Date()) + ' · dados dos ônibus de ' + String(dataUpdated || '').slice(11, 16)
+    + ' · estimativa pela grade horária das linhas (linhas diretas, sem baldeação).';
+  list.appendChild(note);
+  var idade = dataUpdated ? Math.round((Date.now() - Planner.rioMs(dataUpdated)) / 60000) : null;
+  if (idade !== null && idade > 15) {
+    var aviso = document.createElement('div'); aviso.className = 'tnote'; aviso.style.color = 'var(--red)';
+    aviso.textContent = '⚠️ Os dados dos ônibus estão com ' + idade + ' min de atraso (a coleta automática ainda não atualizou). A estimativa pode estar errada.';
+    list.appendChild(aviso);
+  }
+  if (!tripPlan.length) {
+    var e = document.createElement('div'); e.className = 'empty';
+    e.textContent = buses.length ? 'Nenhuma linha direta com ônibus a caminho entre A e B agora. Toque em "Rotas no Google Maps" para opções com baldeação.' : 'Sem dados dos ônibus no momento.';
+    list.appendChild(e);
+    tripLayer.clearLayers();
+    return;
+  }
+  tripPlan.slice(0, 10).forEach(function(t, i) {
+    var div = document.createElement('div'); div.className = 'trip' + (i === tripSel ? ' sel' : '');
+    div.innerHTML = '<div class="trip-top"><span class="tline">' + esc(t.svc) + '</span><span class="thead">→ ' + esc(t.head) + '</span>'
+      + '<span class="ttot"><b>' + t.total + ' min</b> · chega às ' + hhmm(t.arrive) + '</span></div>'
+      + '<div class="tsub">Ônibus chega ao ponto em <b>' + t.waits.join(', ') + ' min</b> · ' + esc(t.stopA) + ' <span>(' + t.walkAm + ' m a pé)</span></div>'
+      + '<div class="tsub">Desça em ' + esc(t.stopB) + ' <span>(' + t.walkBm + ' m até B)</span> · viagem ~' + t.ride + ' min</div>';
+    div.addEventListener('click', function() { tripSel = i; renderTrips(); selectTrip(i, true); });
+    list.appendChild(div);
+  });
+  if (tripSel >= 0) selectTrip(tripSel, false); else tripLayer.clearLayers();
+}
+
+function selectTrip(i, fit) {
+  var t = tripPlan[i];
+  tripLayer.clearLayers();
+  if (!t) return;
+  var sh = tripData.shapes[t.sid];
+  var pts = Planner.slice(sh, t.stopAll.along, t.stopBll.along);
+  if (pts.length > 1) tripLayer.addLayer(L.polyline(pts, { color:'#38BDF8', weight:5, opacity:.85 }));
+  var sa = tripData.stops[t.stopAll.i], sb = tripData.stops[t.stopBll.i];
+  tripLayer.addLayer(L.marker([sa[1], sa[2]], { icon: mkIcon('<div class="stopmk" style="background:#22C55E"></div>', 14, 14) }).bindTooltip('Embarque: ' + sa[0]));
+  tripLayer.addLayer(L.marker([sb[1], sb[2]], { icon: mkIcon('<div class="stopmk" style="background:#F87171"></div>', 14, 14) }).bindTooltip('Desembarque: ' + sb[0]));
+  t.buses.forEach(function(x) {
+    tripLayer.addLayer(L.marker([x.b.lat, x.b.lng], { icon: mkIcon('<div class="waitmk">' + Math.max(1, Math.round(x.w)) + ' min</div>', 44, 22), zIndexOffset: 800 })
+      .bindTooltip('Linha ' + t.svc + ' · ' + x.b.id));
+  });
+  var all = pts.concat(t.buses.map(function(x) { return [x.b.lat, x.b.lng]; }));
+  if (fit && all.length) map.fitBounds(L.latLngBounds(all), { padding:[50,50], maxZoom:16 });
+}
+
 // ───────── Filtro de linhas ─────────
 $('line-input').addEventListener('input', function() {
+  planActive = false;
   filterLines = this.value.split(/[\s,;]+/).map(normLine).filter(Boolean);
   render();
 });
@@ -342,6 +452,8 @@ $('line-input').addEventListener('input', function() {
 function referencia() { return originLL || destLL; }
 
 function render() {
+  if (planActive) { renderTrips(); return; }
+  tripLayer.clearLayers();
   var ref = referencia();
   var list = $('bus-list'), chips = $('chips');
 
@@ -427,8 +539,8 @@ function showFreshness() {
   setStatus(cls, 'Ônibus ao vivo', 'Dados de ' + hora + (min !== null ? ' (há ' + min + ' min)' : '') + ' · SMTR/Rio');
 }
 
-function carregar() {
-  fetch(DATA_URL + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
+function carregar(forcar) {
+  return fetch(DATA_URL + '?t=' + (forcar ? Date.now() : Math.floor(Date.now() / 60000)), { cache: 'no-store' })
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(j) {
       var anterior = {};
@@ -438,7 +550,7 @@ function carregar() {
       dataUpdated = j.updated;
       if (apiErrorState) { apiErrorState = false; showToast('✅ Dados atualizados', 'ok', 2500); }
       showFreshness();
-      render();
+      if (planActive) calcularViagens(); else render();
     })
     .catch(function(e) {
       var msg;
