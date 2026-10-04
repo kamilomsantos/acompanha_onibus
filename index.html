@@ -252,7 +252,7 @@ body { display:flex; flex-direction:column; }
 // ───────── Config ─────────
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 var NOM_URL  = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=br&addressdetails=1&viewbox=-43.8,-22.7,-43.0,-23.1&q=';
-var WORKER_URL = '';   // URL do Worker do Cloudflare (preencher depois do deploy); vazio = só gps.json
+var WORKER_URL = 'https://acompanha-onibus.kamilo-santos.workers.dev/';   // Worker do Cloudflare; se falhar, usa o gps.json
 var REFRESH  = 60000;
 var RAIO_PERTO_KM = 1.5;
 var CENTER   = [-22.9068, -43.1729];
