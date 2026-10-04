@@ -279,11 +279,26 @@ function showToast(msg, type, ms) {
 //  Config
 // ─────────────────────────────────────────
 var LINHA    = '298';
-var GPS_URL  = 'https://dados.mobilidade.rio/gps/sppo?linha=' + LINHA;
-var GPS_V2   = 'https://dados.mobilidade.rio/sppo/gps?linha=' + LINHA;
+var GPS_BASE = 'https://dados.mobilidade.rio/gps/sppo';
 var NOM_URL  = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=br&addressdetails=1&q=';
 var INTERVAL = 30000;
 var CENTER   = [-22.9068, -43.1729];
+
+function buildGpsUrl() {
+  var now = new Date();
+  var ini = new Date(now.getTime() - 5 * 60000);
+  function fmt(d) {
+    return d.getFullYear() + '-' +
+      String(d.getMonth()+1).padStart(2,'0') + '-' +
+      String(d.getDate()).padStart(2,'0') + ' ' +
+      String(d.getHours()).padStart(2,'0') + ':' +
+      String(d.getMinutes()).padStart(2,'0') + ':' +
+      String(d.getSeconds()).padStart(2,'0');
+  }
+  return GPS_BASE + '?linha=' + LINHA
+    + '&dataInicial=' + encodeURIComponent(fmt(ini))
+    + '&dataFinal='   + encodeURIComponent(fmt(now));
+}
 
 // ─────────────────────────────────────────
 //  Estado
@@ -592,6 +607,12 @@ function renderLista() {
 function applyBuses(arr) {
   var now = {};
   arr.forEach(function(b) {
+    // nova API: normaliza campos
+    b.ordem    = b.id_veiculo || b.ordem;
+    b.dataHora = b.datetime   || b.dataHora || '';
+    b.servico  = String(b.servico || '');
+    // filtra apenas linha 298
+    if (b.servico && b.servico !== LINHA) return;
     var lat = parseFloat(b.latitude||b.lat||0), lng = parseFloat(b.longitude||b.lng||0);
     if (!lat || !lng) return;
     b.latitude = lat; b.longitude = lng;
@@ -618,20 +639,25 @@ function applyBuses(arr) {
 
 function fetchGPS() {
   setStatus('wait', 'Atualizando...');
-  var urls = [GPS_URL, GPS_V2], idx = 0;
+  var urls = [buildGpsUrl()], idx = 0;
   function tryNext() {
     if (idx >= urls.length) {
-      setStatus('err', 'Sem internet');
+      var semInternet = !navigator.onLine;
+      var msg = semInternet
+        ? '📶 Sem internet. Os dados voltam automaticamente quando conectar.'
+        : '⚠️ API da SMTR indisponível no momento. Tentando novamente em 30s.';
+      setStatus('err', semInternet ? 'Sem internet' : 'API indisponível');
       if (!apiErrorState) {
         apiErrorState = true;
-        showToast('📶 Sem conexão com a API. Os dados serão atualizados quando a internet voltar.', 'error', 6000);
+        showToast(msg, 'error', 6000);
         document.getElementById('bus-list').innerHTML =
-          '<div class="empty" style="color:var(--red)">📶 Sem internet ou API indisponível.<br>Os dados serão atualizados automaticamente quando a conexão voltar.</div>';
+          '<div class="empty" style="color:var(--red)">' + msg + '</div>';
       }
       return;
     }
-    fetch(urls[idx++])
-      .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    var url = urls[idx++];
+    fetch(url)
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function(data) {
         var arr   = Array.isArray(data) ? data : (data.gps || data.veiculos || []);
         if (apiErrorState) { apiErrorState = false; showToast('✅ Conexão restabelecida!', 'ok', 3000); }
