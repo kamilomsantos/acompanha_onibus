@@ -259,6 +259,23 @@
     });
   }
 
-  var api = { linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
+  // Resposta bruta da SMTR (todos os registros da janela) -> mesmo formato do gps.json: a posição mais recente de cada veículo.
+  function consolidar(dados) {
+    var ult = {}, max = '';
+    dados.forEach(function (b) {
+      if (b.latitude == null || b.longitude == null || !b.id_veiculo) return;
+      var dt = String(b.datetime);
+      if (!ult[b.id_veiculo] || dt > String(ult[b.id_veiculo].datetime)) ult[b.id_veiculo] = b;
+      if (dt > max) max = dt;
+    });
+    var buses = Object.keys(ult).map(function (k) {
+      var b = ult[k];
+      return [String(b.servico || ''), b.id_veiculo, Math.round(b.latitude * 1e5) / 1e5, Math.round(b.longitude * 1e5) / 1e5,
+        Math.round(b.velocidade || 0), b.sentido || '', b.datetime];
+    });
+    return { updated: max.replace('T', ' ').replace('Z', '').slice(0, 19), buses: buses };
+  }
+
+  var api = { consolidar: consolidar, linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Planner = api;
 })(typeof window !== 'undefined' ? window : this);

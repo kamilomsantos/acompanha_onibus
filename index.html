@@ -252,6 +252,7 @@ body { display:flex; flex-direction:column; }
 // ───────── Config ─────────
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 var NOM_URL  = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=br&addressdetails=1&viewbox=-43.8,-22.7,-43.0,-23.1&q=';
+var WORKER_URL = '';   // URL do Worker do Cloudflare (preencher depois do deploy); vazio = só gps.json
 var REFRESH  = 60000;
 var RAIO_PERTO_KM = 1.5;
 var CENTER   = [-22.9068, -43.1729];
@@ -1061,9 +1062,22 @@ function showFreshness() {
   setStatus(cls, 'Ônibus ao vivo', 'Dados de ' + hora + (min !== null ? ' (há ' + min + ' min)' : '') + ' · SMTR/Rio');
 }
 
+// 1ª opção: Worker do Cloudflare (repassa a SMTR com CORS e cache de 30 s; o celular consolida). Reserva: gps.json do GitHub Actions.
+function buscarDados(forcar) {
+  var t = forcar ? Date.now() : Math.floor(Date.now() / 30000);
+  var doWorker = WORKER_URL
+    ? fetch(WORKER_URL + (WORKER_URL.indexOf('?') < 0 ? '?' : '&') + 't=' + t, { cache: 'no-store' })
+        .then(function(r) { if (!r.ok) throw new Error('worker ' + r.status); return r.json(); })
+        .then(function(arr) { if (!Array.isArray(arr) || arr.length < 100) throw new Error('worker sem dados'); return Planner.consolidar(arr); })
+    : Promise.reject(new Error('sem worker'));
+  return doWorker.catch(function() {
+    return fetch(DATA_URL + '?t=' + (forcar ? Date.now() : Math.floor(Date.now() / 60000)), { cache: 'no-store' })
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  });
+}
+
 function carregar(forcar) {
-  return fetch(DATA_URL + '?t=' + (forcar ? Date.now() : Math.floor(Date.now() / 60000)), { cache: 'no-store' })
-    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+  return buscarDados(forcar)
     .then(function(j) {
       var anterior = {};
       buses.forEach(function(b) { anterior[b.id] = { lat: b.lat, lng: b.lng }; });
