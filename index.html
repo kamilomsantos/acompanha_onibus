@@ -3,692 +3,456 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Ônibus Rio — Linha 298</title>
+<title>Ônibus Rio ao Vivo</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
 :root {
-  --bg:      #0F172A;
-  --surf:    #1E293B;
-  --surf2:   #263448;
-  --fg:      #E2E8F0;
-  --muted:   #64748B;
-  --border:  #334155;
-  --yellow:  #F59E0B;
-  --ydim:    rgba(245,158,11,.15);
-  --green:   #22C55E;
-  --gdim:    rgba(34,197,94,.15);
-  --blue:    #38BDF8;
-  --red:     #F87171;
+  --bg:#0F172A; --surf:#1E293B; --surf2:#263448; --fg:#E2E8F0; --muted:#64748B; --border:#334155;
+  --yellow:#F59E0B; --ydim:rgba(245,158,11,.15); --green:#22C55E; --gdim:rgba(34,197,94,.15);
+  --blue:#38BDF8; --red:#F87171;
   color-scheme: dark;
 }
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; background: var(--bg); color: var(--fg); font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
-body { display: flex; flex-direction: column; }
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+html, body { height:100%; background:var(--bg); color:var(--fg); font-family:'Inter',system-ui,sans-serif; overflow:hidden; }
+body { display:flex; flex-direction:column; }
 
-/* ── Top bar ── */
-.topbar {
-  background: var(--surf); border-bottom: 1px solid var(--border);
-  padding: 10px 14px; display: flex; align-items: center; gap: 10px;
-  flex-shrink: 0; z-index: 1000;
-}
-.badge298 {
-  background: var(--yellow); color: #000;
-  font-size: .9rem; font-weight: 800; padding: 4px 10px;
-  border-radius: 7px; letter-spacing: .04em; flex-shrink: 0;
-}
-.topbar-info { flex: 1; min-width: 0; }
-.topbar-title { font-size: .85rem; font-weight: 700; color: var(--fg); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.topbar-sub   { font-size: .66rem; color: var(--muted); margin-top: 1px; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
-.dot.live { background: var(--green); animation: pulse 1.5s infinite; }
-.dot.wait { background: var(--yellow); }
-.dot.err  { background: var(--red); }
+.topbar { background:var(--surf); border-bottom:1px solid var(--border); padding:9px 14px; display:flex; align-items:center; gap:10px; flex-shrink:0; z-index:1000; }
+.logo { background:var(--yellow); color:#000; font-size:.7rem; font-weight:800; padding:5px 8px; border-radius:7px; letter-spacing:.06em; flex-shrink:0; }
+.topbar-info { flex:1; min-width:0; }
+.topbar-title { font-size:.85rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.topbar-sub { font-size:.64rem; color:var(--muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+.dot.live { background:var(--green); animation:pulse 1.5s infinite; }
+.dot.wait { background:var(--yellow); }
+.dot.err  { background:var(--red); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-#counter { font-family: 'JetBrains Mono', monospace; font-size: .85rem; font-weight: 600; color: var(--yellow); flex-shrink: 0; }
+#counter { font-family:'JetBrains Mono',monospace; font-size:.8rem; font-weight:600; color:var(--yellow); flex-shrink:0; }
 
-/* ── Search bar ── */
-.search-bar {
-  background: var(--surf); border-bottom: 1px solid var(--border);
-  padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;
-  flex-shrink: 0; z-index: 999;
-}
-.search-row { display: flex; gap: 6px; align-items: center; position: relative; }
-.field-wrap { flex: 1; position: relative; }
+.search-bar { background:var(--surf); border-bottom:1px solid var(--border); padding:8px 12px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; z-index:999; }
+.search-row { display:flex; gap:6px; align-items:center; position:relative; }
+.field-wrap { flex:1; position:relative; min-width:0; }
+.search-bar input { width:100%; background:var(--surf2); border:1px solid var(--border); color:var(--fg); border-radius:8px; padding:8px 10px 8px 42px; font-size:.82rem; font-family:'Inter',sans-serif; outline:none; transition:border-color .2s; }
+.search-bar input:focus { border-color:var(--blue); }
+.search-bar input::placeholder { color:var(--muted); font-size:.76rem; }
+.field-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700; pointer-events:none; z-index:1; }
+.field-icon.orig { background:var(--blue); color:#000; }
+.field-icon.dest { background:var(--red); color:#fff; }
+.field-icon.line { background:var(--yellow); color:#000; font-size:.6rem; }
 
-.search-label {
-  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
-  font-size: .6rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--muted); pointer-events: none; z-index: 1;
-  background: var(--surf2); padding: 0 3px; transition: all .15s;
-}
-.field-wrap input:not(:placeholder-shown) ~ .search-label,
-.field-wrap input:focus ~ .search-label {
-  top: 0; font-size: .58rem; color: var(--blue);
-}
+.ac-drop { position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--surf); border:1px solid var(--border); border-radius:10px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:2000; max-height:220px; display:none; }
+.ac-drop.open { display:block; }
+.ac-item { padding:9px 12px; cursor:pointer; font-size:.78rem; line-height:1.4; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:flex-start; }
+.ac-item:last-child { border-bottom:none; }
+.ac-item:hover, .ac-item.active { background:var(--surf2); }
+.ac-icon { font-size:.9rem; flex-shrink:0; margin-top:1px; }
+.ac-main { font-weight:600; }
+.ac-sub { font-size:.68rem; color:var(--muted); margin-top:1px; }
+.ac-msg { padding:10px 12px; font-size:.75rem; color:var(--muted); text-align:center; }
 
-.search-bar input {
-  width: 100%; background: var(--surf2); border: 1px solid var(--border);
-  color: var(--fg); border-radius: 8px; padding: 8px 10px 8px 48px;
-  font-size: .82rem; font-family: 'Inter', sans-serif; outline: none;
-  transition: border-color .2s;
-}
-.search-bar input:focus { border-color: var(--blue); }
-.search-bar input::placeholder { color: var(--muted); font-size: .78rem; }
+.btn-gps { background:none; border:1px solid var(--border); color:var(--blue); border-radius:7px; padding:6px 9px; font-size:.7rem; font-weight:600; cursor:pointer; white-space:nowrap; font-family:'Inter',sans-serif; flex-shrink:0; }
+.btn-gps:hover { background:var(--surf2); }
+.btn-ir { background:var(--yellow); color:#000; border:none; border-radius:8px; padding:8px 12px; font-size:.78rem; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; flex-shrink:0; }
+.btn-ir:hover { background:#d97706; }
 
-.field-icon {
-  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-  width: 24px; height: 24px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: .7rem; font-weight: 700; pointer-events: none; z-index: 1;
-}
-.field-icon.orig { background: var(--blue); color: #000; }
-.field-icon.dest { background: var(--red); color: #fff; }
+#map { flex:1; min-height:0; }
 
-/* ── Dropdown autocomplete ── */
-.ac-drop {
-  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-  background: var(--surf); border: 1px solid var(--border);
-  border-radius: 10px; overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0,0,0,.5);
-  z-index: 2000; max-height: 220px; overflow-y: auto;
-  display: none;
-}
-.ac-drop.open { display: block; }
-.ac-item {
-  padding: 9px 12px; cursor: pointer; font-size: .78rem; line-height: 1.4;
-  border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start;
-}
-.ac-item:last-child { border-bottom: none; }
-.ac-item:hover, .ac-item.active { background: var(--surf2); }
-.ac-icon { font-size: .9rem; flex-shrink: 0; margin-top: 1px; }
-.ac-main { font-weight: 600; color: var(--fg); }
-.ac-sub  { font-size: .68rem; color: var(--muted); margin-top: 1px; }
-.ac-loading { padding: 10px 12px; font-size: .75rem; color: var(--muted); text-align: center; }
-.ac-empty   { padding: 10px 12px; font-size: .75rem; color: var(--muted); text-align: center; }
+.toast { position:fixed; bottom:38vh; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid var(--border); color:var(--fg); border-radius:10px; padding:10px 16px; font-size:.78rem; max-width:90vw; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,.6); z-index:3000; opacity:0; pointer-events:none; transition:opacity .25s; }
+.toast.show { opacity:1; }
+.toast.warn  { border-color:var(--yellow); color:var(--yellow); }
+.toast.error { border-color:var(--red); color:var(--red); }
+.toast.ok    { border-color:var(--green); color:var(--green); }
 
-/* separador entre campos */
-.route-line {
-  display: flex; align-items: center; gap: 6px; padding: 0 2px;
-}
-.route-line::before {
-  content: ''; display: block; width: 2px; height: 14px;
-  background: linear-gradient(to bottom, var(--blue), var(--red));
-  border-radius: 2px; margin-left: 11px; flex-shrink: 0;
-}
-.btn-gps {
-  background: none; border: 1px solid var(--border); color: var(--blue);
-  border-radius: 7px; padding: 4px 8px; font-size: .68rem; font-weight: 600;
-  cursor: pointer; white-space: nowrap; font-family: 'Inter', sans-serif;
-  transition: background .15s; flex-shrink: 0;
-}
-.btn-gps:hover { background: var(--surf2); }
+.panel { background:var(--surf); border-top:1px solid var(--border); flex-shrink:0; overflow-y:auto; max-height:34vh; }
+.panel-head { padding:7px 14px; background:var(--surf2); font-size:.62rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; justify-content:space-between; gap:8px; position:sticky; top:0; z-index:1; border-bottom:1px solid var(--border); }
+.gm-link { font-size:.6rem; padding:3px 7px; text-decoration:none; color:var(--blue); border:1px solid var(--border); border-radius:6px; letter-spacing:.02em; text-transform:none; }
 
-.btn-ir {
-  background: var(--yellow); color: #000; border: none;
-  border-radius: 8px; padding: 8px 14px; font-size: .8rem;
-  font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif;
-  transition: background .15s; flex-shrink: 0; align-self: flex-end;
-}
-.btn-ir:hover { background: #d97706; }
+.chips { padding:8px 12px; display:flex; flex-wrap:wrap; gap:6px; border-bottom:1px solid var(--border); align-items:center; }
+.chips-label { font-size:.62rem; color:var(--muted); width:100%; }
+.chip { background:var(--surf2); border:1px solid var(--border); color:var(--yellow); border-radius:14px; padding:3px 9px; font-family:'JetBrains Mono',monospace; font-size:.74rem; font-weight:600; cursor:pointer; }
+.chip.both { border-color:var(--green); color:var(--green); }
+.chip:hover { background:var(--border); }
 
-/* ── Mapa ── */
-#map { flex: 1; min-height: 0; }
+.brow { padding:9px 14px; display:grid; grid-template-columns:58px 1fr auto; gap:8px; align-items:center; border-bottom:1px solid var(--border); }
+.brow:last-child { border-bottom:none; }
+.brow.nearest { background:var(--gdim); }
+.bline { font-family:'JetBrains Mono',monospace; font-size:.86rem; font-weight:700; color:var(--yellow); }
+.bid { font-family:'JetBrains Mono',monospace; font-size:.58rem; color:var(--muted); margin-top:2px; }
+.bdist { font-size:.82rem; font-weight:700; }
+.bdir { font-size:.65rem; color:var(--muted); margin-top:2px; }
+.bspd { font-family:'JetBrains Mono',monospace; font-size:.76rem; color:var(--muted); text-align:right; }
+.bage { font-family:'JetBrains Mono',monospace; font-size:.6rem; color:var(--muted); text-align:right; }
+.badge { font-size:.56rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:2px 5px; border-radius:4px; }
+.b-aprox { background:var(--gdim); color:var(--green); }
+.b-longe { background:var(--ydim); color:var(--yellow); }
+.empty { padding:16px; text-align:center; font-size:.78rem; color:var(--muted); line-height:1.6; }
 
-/* ── Toast de aviso ── */
-.toast {
-  position: fixed; bottom: 240px; left: 50%; transform: translateX(-50%);
-  background: #1e293b; border: 1px solid var(--border);
-  color: var(--fg); border-radius: 10px; padding: 10px 16px;
-  font-size: .78rem; max-width: 90vw; text-align: center;
-  box-shadow: 0 4px 20px rgba(0,0,0,.6);
-  z-index: 3000; opacity: 0; pointer-events: none;
-  transition: opacity .25s;
-}
-.toast.show { opacity: 1; }
-.toast.warn  { border-color: var(--yellow); color: var(--yellow); }
-.toast.error { border-color: var(--red);    color: var(--red); }
-.toast.ok    { border-color: var(--green);  color: var(--green); }
-
-/* ── Painel bottom ── */
-.panel {
-  background: var(--surf); border-top: 1px solid var(--border);
-  flex-shrink: 0; overflow-y: auto; max-height: 220px;
-}
-.panel-head {
-  padding: 7px 14px; background: var(--surf2);
-  font-size: .62rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
-  display: flex; align-items: center; justify-content: space-between;
-  position: sticky; top: 0; z-index: 1; border-bottom: 1px solid var(--border);
-}
-#last-upd { font-family: 'JetBrains Mono', monospace; font-size: .62rem; color: var(--muted); }
-
-.brow {
-  padding: 9px 14px; display: grid;
-  grid-template-columns: 52px 1fr auto;
-  gap: 8px; align-items: center;
-  border-bottom: 1px solid var(--border);
-}
-.brow:last-child { border-bottom: none; }
-.brow.nearest { background: var(--gdim); }
-.bid  { font-family: 'JetBrains Mono', monospace; font-size: .78rem; font-weight: 600; color: var(--yellow); }
-.binfo { min-width: 0; }
-.bdist { font-size: .82rem; font-weight: 700; color: var(--fg); }
-.bdir  { font-size: .65rem; color: var(--muted); margin-top: 2px; }
-.bspd  { font-family: 'JetBrains Mono', monospace; font-size: .78rem; color: var(--muted); text-align: right; }
-.badge { font-size: .56rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 5px; border-radius: 4px; }
-.b-aprox { background: var(--gdim); color: var(--green); }
-.b-longe  { background: var(--ydim); color: var(--yellow); }
-
-.empty { padding: 18px; text-align: center; font-size: .78rem; color: var(--muted); line-height: 1.6; }
-.err-msg { padding: 14px 16px; font-size: .75rem; color: var(--red); line-height: 1.6; }
-
-/* ── Marcadores ── */
-.bmarker {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: var(--yellow); border: 2.5px solid #000;
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'JetBrains Mono', monospace; font-size: .58rem; font-weight: 700; color: #000;
-  box-shadow: 0 2px 8px rgba(0,0,0,.6); cursor: pointer;
-  line-height: 1;
-}
-.bmarker.nearest-bus { background: var(--green); border-color: #fff; color: #000; }
-.origin-dot {
-  width: 18px; height: 18px; border-radius: 50%;
-  background: var(--blue); border: 3px solid #fff;
-  box-shadow: 0 0 0 5px rgba(56,189,248,.3), 0 2px 8px rgba(0,0,0,.4);
-}
-.dest-dot {
-  width: 22px; height: 22px; border-radius: 50%;
-  background: var(--red); border: 3px solid #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center;
-  font-size:.7rem; font-weight:700; color:#fff;
-}
+.bmarker { min-width:34px; height:24px; padding:0 5px; border-radius:12px; background:var(--yellow); border:2px solid #000; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:.64rem; font-weight:700; color:#000; box-shadow:0 2px 8px rgba(0,0,0,.6); white-space:nowrap; }
+.bmarker.nearest-bus { background:var(--green); border-color:#fff; }
+.origin-dot { width:18px; height:18px; border-radius:50%; background:var(--blue); border:3px solid #fff; box-shadow:0 0 0 5px rgba(56,189,248,.3), 0 2px 8px rgba(0,0,0,.4); }
+.dest-dot { width:22px; height:22px; border-radius:50%; background:var(--red); border:3px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700; color:#fff; }
 </style>
 </head>
 <body>
 
-<!-- TOPBAR -->
 <div class="topbar">
-  <div class="badge298">298</div>
+  <div class="logo">RIO</div>
   <div class="topbar-info">
-    <div class="topbar-title" id="title-txt">Carregando...</div>
-    <div class="topbar-sub" id="sub-txt">GPS ao vivo · SMTR / data.rio</div>
+    <div class="topbar-title" id="title-txt">Ônibus ao vivo</div>
+    <div class="topbar-sub" id="sub-txt">Carregando dados...</div>
   </div>
   <span id="counter">--</span>
   <div class="dot wait" id="sdot"></div>
 </div>
 
-<!-- BUSCA ORIGEM + DESTINO -->
 <div class="search-bar">
-  <!-- Origem -->
   <div class="search-row">
     <div class="field-wrap">
       <div class="field-icon orig">A</div>
-      <input id="orig-input" type="text" placeholder="Partindo de... (endereço ou bairro)" autocomplete="off">
+      <input id="orig-input" type="text" placeholder="Partindo de... (endereço, bairro, lugar)" autocomplete="off">
       <div class="ac-drop" id="orig-drop"></div>
     </div>
-    <button class="btn-gps" onclick="usarLocalizacao()">&#9679; GPS</button>
+    <button class="btn-gps" id="btn-gps">&#9679; GPS</button>
   </div>
-
-  <!-- linha visual -->
-  <div class="route-line"></div>
-
-  <!-- Destino -->
   <div class="search-row">
     <div class="field-wrap">
       <div class="field-icon dest">B</div>
-      <input id="dest-input" type="text" placeholder="Destino... (endereço ou bairro)" autocomplete="off">
+      <input id="dest-input" type="text" placeholder="Destino... (endereço, bairro, lugar)" autocomplete="off">
       <div class="ac-drop" id="dest-drop"></div>
     </div>
-    <button class="btn-ir" onclick="traccarRota()">Traçar</button>
+    <button class="btn-ir" id="btn-tracar">Traçar</button>
+  </div>
+  <div class="search-row">
+    <div class="field-wrap">
+      <div class="field-icon line">LN</div>
+      <input id="line-input" type="text" placeholder="Filtrar linhas (ex: 298, 413) — vazio = ônibus perto de você" autocomplete="off">
+    </div>
   </div>
 </div>
 
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
-
-<!-- MAPA -->
 <div id="map"></div>
 
-<!-- PAINEL -->
 <div class="panel">
   <div class="panel-head">
-    <span>Ônibus mais próximos</span>
-    <span id="last-upd">--:--:--</span>
+    <span id="panel-title">Ônibus mais próximos</span>
+    <a class="gm-link" id="gm-link" target="_blank" rel="noopener" hidden>Rotas no Google Maps</a>
   </div>
-  <div id="bus-list"><div class="empty">Defina sua origem (GPS ou endereço) para ver os ônibus mais próximos.</div></div>
+  <div id="chips" class="chips" hidden></div>
+  <div id="bus-list"><div class="empty">Defina a origem (GPS, endereço ou toque no mapa) para ver os ônibus perto de você.</div></div>
 </div>
 
 <script>
-// ─────────────────────────────────────────
-//  Toast
-// ─────────────────────────────────────────
-var toastTimer = null;
-function showToast(msg, type, ms) {
-  var el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'toast show ' + (type||'warn');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(function() { el.classList.remove('show'); }, ms||4000);
-}
-
-// ─────────────────────────────────────────
-//  Config
-// ─────────────────────────────────────────
-var LINHA    = '298';
-var GPS_BASE = 'https://dados.mobilidade.rio/gps/sppo';
-var NOM_URL  = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=br&addressdetails=1&q=';
-var INTERVAL = 30000;
+// ───────── Config ─────────
+var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
+var NOM_URL  = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=br&addressdetails=1&viewbox=-43.8,-22.7,-43.0,-23.1&q=';
+var REFRESH  = 60000;
+var RAIO_PERTO_KM = 1.5;
 var CENTER   = [-22.9068, -43.1729];
+var MAX_MARKERS = 200;
 
-function buildGpsUrl() {
-  var now = new Date();
-  var ini = new Date(now.getTime() - 5 * 60000);
-  function fmt(d) {
-    return d.getFullYear() + '-' +
-      String(d.getMonth()+1).padStart(2,'0') + '-' +
-      String(d.getDate()).padStart(2,'0') + ' ' +
-      String(d.getHours()).padStart(2,'0') + ':' +
-      String(d.getMinutes()).padStart(2,'0') + ':' +
-      String(d.getSeconds()).padStart(2,'0');
-  }
-  return GPS_BASE + '?linha=' + LINHA
-    + '&dataInicial=' + encodeURIComponent(fmt(ini))
-    + '&dataFinal='   + encodeURIComponent(fmt(now));
-}
-
-// ─────────────────────────────────────────
-//  Estado
-// ─────────────────────────────────────────
-var map, originMk, destMk, gmBtn;
-var busMarkers = {}, busData = {}, prevPos = {};
+// ───────── Estado ─────────
+var map, originMk, destMk, busLayer;
 var originLL = null, destLL = null;
-var acTimers = { orig: null, dest: null };
-var acActive = { orig: -1, dest: -1 };
-var apiErrorState = false;
+var dirty = { orig: false, dest: false };
+var buses = [], prevPos = {}, dataUpdated = null, apiErrorState = false;
+var filterLines = [];
 
-// ─────────────────────────────────────────
-//  Mapa
-// ─────────────────────────────────────────
-map = L.map('map', { zoomControl: true }).setView(CENTER, 12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-}).addTo(map);
-
-map.on('click', function(e) { setOrigem(e.latlng.lat, e.latlng.lng, 'ponto no mapa'); });
-
-function mkIcon(html, size) {
-  return L.divIcon({ className: '', html: html, iconSize: size, iconAnchor: [size[0]/2, size[1]/2] });
-}
-
-function setOrigem(lat, lng, label) {
-  originLL = { lat: lat, lng: lng };
-  if (originMk) map.removeLayer(originMk);
-  originMk = L.marker([lat, lng], { icon: mkIcon('<div class="origin-dot"></div>', [18,18]), zIndexOffset: 2000 })
-               .addTo(map).bindTooltip('Origem — ' + label, { permanent: false, direction: 'top' });
-  renderLista();
-  updateGmapsBtn();
-}
-
-function setDestino(lat, lng, label) {
-  destLL = { lat: lat, lng: lng };
-  if (destMk) map.removeLayer(destMk);
-  destMk = L.marker([lat, lng], { icon: mkIcon('<div class="dest-dot">B</div>', [22,22]), zIndexOffset: 2000 })
-             .addTo(map).bindTooltip('Destino — ' + label, { permanent: false, direction: 'top' });
-  if (originLL) {
-    map.fitBounds([[originLL.lat, originLL.lng],[lat, lng]], { padding: [60,60] });
-  } else {
-    map.setView([lat, lng], 15);
-  }
-  updateGmapsBtn();
-}
-
-// ─────────────────────────────────────────
-//  Autocomplete
-// ─────────────────────────────────────────
-function setupAc(inputId, dropId, onSelect) {
-  var inp  = document.getElementById(inputId);
-  var drop = document.getElementById(dropId);
-
-  inp.addEventListener('input', function() {
-    clearTimeout(acTimers[inputId.replace('-input','')]);
-    var q = inp.value.trim();
-    if (q.length < 3) { closeDrop(drop); return; }
-    drop.innerHTML = '<div class="ac-loading">Buscando...</div>';
-    openDrop(drop);
-    acTimers[inputId.replace('-input','')] = setTimeout(function() { fetchSuggest(q, drop, onSelect, inp); }, 400);
-  });
-
-  inp.addEventListener('keydown', function(e) {
-    var items = drop.querySelectorAll('.ac-item');
-    var key   = inputId.indexOf('orig') >= 0 ? 'orig' : 'dest';
-    if (!items.length) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      acActive[key] = Math.min(acActive[key]+1, items.length-1);
-      highlightItem(items, acActive[key]);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      acActive[key] = Math.max(acActive[key]-1, 0);
-      highlightItem(items, acActive[key]);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (acActive[key] >= 0 && items[acActive[key]]) items[acActive[key]].click();
-      else if (inputId === 'dest-input') traccarRota();
-    } else if (e.key === 'Escape') {
-      closeDrop(drop);
-    }
-  });
-
-  inp.addEventListener('blur', function() {
-    setTimeout(function() { closeDrop(drop); }, 200);
-  });
-}
-
-function highlightItem(items, idx) {
-  items.forEach(function(el, i) { el.classList.toggle('active', i === idx); });
-  if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
-}
-
-function openDrop(drop) { drop.classList.add('open'); }
-function closeDrop(drop) { drop.classList.remove('open'); }
-
-function fetchSuggest(q, drop, onSelect, inp) {
-  var query = q + ', Rio de Janeiro';
-  fetch(NOM_URL + encodeURIComponent(query))
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data || !data.length) {
-        drop.innerHTML = '<div class="ac-empty">Nenhum resultado para "'+q+'"</div>';
-        openDrop(drop);
-        return;
-      }
-      drop.innerHTML = '';
-      data.slice(0,5).forEach(function(item) {
-        var addr = item.address || {};
-        var main = addr.road || addr.suburb || addr.neighbourhood || addr.city_district || item.display_name.split(',')[0];
-        var sub  = [addr.suburb || addr.neighbourhood, addr.city_district, addr.city || 'Rio de Janeiro']
-                   .filter(Boolean).join(', ');
-        var icon = getPlaceIcon(item.type || item.class);
-        var div = document.createElement('div');
-        div.className = 'ac-item';
-        div.innerHTML = '<span class="ac-icon">'+icon+'</span>'
-                       +'<div><div class="ac-main">'+main+'</div><div class="ac-sub">'+sub+'</div></div>';
-        div.addEventListener('mousedown', function(e) { e.preventDefault(); });
-        div.addEventListener('click', function() {
-          inp.value = main + (sub ? ', ' + sub.split(',')[0] : '');
-          closeDrop(drop);
-          onSelect(parseFloat(item.lat), parseFloat(item.lon), main);
-        });
-        drop.appendChild(div);
-      });
-      openDrop(drop);
-    })
-    .catch(function() { closeDrop(drop); });
-}
-
-function getPlaceIcon(type) {
-  var icons = {
-    'bus_stop':'🚌','bus_station':'🚌','subway':'🚇','train_station':'🚆','station':'🚆',
-    'hospital':'🏥','school':'🏫','university':'🎓','college':'🎓',
-    'park':'🌳','beach':'🏖️','stadium':'🏟️','cinema':'🎬',
-    'supermarket':'🛒','mall':'🛍️','shopping':'🛍️','bank':'🏦',
-    'restaurant':'🍽️','fast_food':'🍔','cafe':'☕',
-    'hotel':'🏨','hostel':'🛏️',
-    'fuel':'⛽','parking':'🅿️',
-    'museum':'🏛️','church':'⛪','temple':'🛕',
-    'road':'📍','residential':'🏠','suburb':'📍',
-  };
-  if (!type) return '📍';
-  for (var k in icons) { if (type.toLowerCase().indexOf(k) >= 0) return icons[k]; }
-  return '📍';
-}
-
-// Inicializa autocomplete dos dois campos
-setupAc('orig-input', 'orig-drop', function(lat, lng, label) {
-  setOrigem(lat, lng, label);
-  map.setView([lat, lng], 15);
-  setStatus('live', 'Origem definida');
-});
-
-setupAc('dest-input', 'dest-drop', function(lat, lng, label) {
-  setDestino(lat, lng, label);
-  setStatus('live', 'Destino definido');
-});
-
-// ─────────────────────────────────────────
-//  Geolocalização
-// ─────────────────────────────────────────
-function usarLocalizacao() {
-  setStatus('wait', 'Obtendo localização GPS...');
-  if (!navigator.geolocation) { alert('Geolocalização não suportada neste navegador.'); return; }
-  navigator.geolocation.getCurrentPosition(
-    function(pos) {
-      setOrigem(pos.coords.latitude, pos.coords.longitude, 'GPS');
-      map.setView([pos.coords.latitude, pos.coords.longitude], 15);
-      document.getElementById('orig-input').value = 'Minha localização (GPS)';
-      setStatus('live', 'Localização obtida');
-      showToast('📍 Localização obtida com sucesso!', 'ok', 3000);
-    },
-    function(err) {
-      var msgs = {
-        1: '🔒 Permissão de localização negada. Digite sua origem no campo acima.',
-        2: '📡 Posição indisponível. Digite sua origem no campo acima.',
-        3: '⏱ Tempo esgotado ao obter GPS. Digite sua origem no campo acima.'
-      };
-      showToast(msgs[err.code] || '❌ Erro ao obter localização. Digite sua origem.', 'error', 6000);
-      setStatus('wait', 'GPS indisponível — use o campo Origem');
-    },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
-  );
-}
-
-// ─────────────────────────────────────────
-//  Traçar rota (geocoda campos manualmente)
-// ─────────────────────────────────────────
-function traccarRota() {
-  var orig = document.getElementById('orig-input').value.trim();
-  var dest = document.getElementById('dest-input').value.trim();
-  var tasks = [];
-  if (orig && orig !== 'Minha localização (GPS)' && !originLL) {
-    tasks.push(geocodeField(orig + ' Rio de Janeiro', function(lat, lng, label) {
-      setOrigem(lat, lng, label);
-    }));
-  }
-  if (dest && !destLL) {
-    tasks.push(geocodeField(dest + ' Rio de Janeiro', function(lat, lng, label) {
-      setDestino(lat, lng, label);
-    }));
-  }
-  if (!tasks.length && originLL && destLL) { updateGmapsBtn(); return; }
-  Promise.all(tasks).then(function() { updateGmapsBtn(); }).catch(function() {});
-}
-
-function geocodeField(query, callback) {
-  return fetch(NOM_URL + encodeURIComponent(query))
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data && data.length) {
-        callback(parseFloat(data[0].lat), parseFloat(data[0].lon), data[0].display_name.split(',')[0]);
-      }
-    });
-}
-
-// ─────────────────────────────────────────
-//  Botão Google Maps
-// ─────────────────────────────────────────
-function updateGmapsBtn() {
-  if (!originLL) return;
-  var panel = document.querySelector('.panel-head');
-  if (!gmBtn) {
-    gmBtn = document.createElement('a');
-    gmBtn.className = 'btn-gps';
-    gmBtn.style.cssText = 'font-size:.58rem;padding:3px 7px;text-decoration:none;display:inline-block;color:var(--blue);';
-    gmBtn.target = '_blank';
-    gmBtn.textContent = 'Abrir no Maps';
-    panel.appendChild(gmBtn);
-  }
-  var orig = originLL.lat + ',' + originLL.lng;
-  var dest = destLL ? (destLL.lat + ',' + destLL.lng) : '';
-  gmBtn.href = 'https://www.google.com/maps/dir/?api=1'
-    + '&origin=' + orig
-    + (dest ? '&destination=' + dest : '')
-    + '&travelmode=transit';
-}
-
-// ─────────────────────────────────────────
-//  Haversine
-// ─────────────────────────────────────────
+// ───────── Utilidades ─────────
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function normLine(s) { return String(s).toUpperCase().replace(/\s+/g, ''); }
 function hav(la1, lo1, la2, lo2) {
   var R = 6371, d1 = (la2-la1)*Math.PI/180, d2 = (lo2-lo1)*Math.PI/180;
   var a = Math.sin(d1/2)*Math.sin(d1/2) + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(d2/2)*Math.sin(d2/2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
-function fmtDist(km) { return km < 1 ? Math.round(km*1000)+'m' : km.toFixed(1)+'km'; }
-function fmtEta(km, spd) {
-  if (!spd || spd < 2) return '';
-  var min = Math.round((km / spd) * 60);
-  return min < 1 ? ' · chegando' : ' · ~'+min+'min';
+function fmtDist(km) { return km < 1 ? Math.round(km*1000)+' m' : km.toFixed(1)+' km'; }
+// A API devolve hora do Rio com "Z" falso; interpretar como UTC-3.
+function rioMs(s) { return Date.parse(String(s).replace(' ', 'T').replace('Z', '') + '-03:00'); }
+function ageMin(s) { var t = rioMs(s); return isNaN(t) ? null : Math.max(0, Math.round((Date.now() - t) / 60000)); }
+
+var toastTimer = null;
+function showToast(msg, type, ms) {
+  var el = $('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type || 'warn');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { el.classList.remove('show'); }, ms || 4000);
+}
+function setStatus(cls, title, sub) {
+  $('sdot').className = 'dot ' + cls;
+  if (title) $('title-txt').textContent = title;
+  if (sub !== undefined) $('sub-txt').textContent = sub;
 }
 
-// ─────────────────────────────────────────
-//  Renderiza lista
-// ─────────────────────────────────────────
-function renderLista() {
-  var list = document.getElementById('bus-list');
-  var buses = Object.values(busData);
-  if (!buses.length) {
-    list.innerHTML = '<div class="empty">Nenhum ônibus ativo na linha 298 agora.</div>'; return;
+// ───────── Mapa ─────────
+map = L.map('map').setView(CENTER, 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(map);
+busLayer = L.layerGroup().addTo(map);
+map.on('click', function(e) {
+  setOrigem(e.latlng.lat, e.latlng.lng, 'ponto no mapa');
+  $('orig-input').value = 'Ponto no mapa'; dirty.orig = false;
+});
+
+function mkIcon(html, w, h) { return L.divIcon({ className:'', html:html, iconSize:[w,h], iconAnchor:[w/2,h/2] }); }
+
+function setOrigem(lat, lng, label) {
+  originLL = { lat:lat, lng:lng };
+  if (originMk) map.removeLayer(originMk);
+  originMk = L.marker([lat,lng], { icon: mkIcon('<div class="origin-dot"></div>',18,18), zIndexOffset:2000 })
+    .addTo(map).bindTooltip('Origem — ' + label, { direction:'top' });
+  render(); updateGmaps();
+}
+function setDestino(lat, lng, label) {
+  destLL = { lat:lat, lng:lng };
+  if (destMk) map.removeLayer(destMk);
+  destMk = L.marker([lat,lng], { icon: mkIcon('<div class="dest-dot">B</div>',22,22), zIndexOffset:2000 })
+    .addTo(map).bindTooltip('Destino — ' + label, { direction:'top' });
+  if (originLL) map.fitBounds([[originLL.lat,originLL.lng],[lat,lng]], { padding:[60,60] });
+  else map.setView([lat,lng], 15);
+  render(); updateGmaps();
+}
+
+function updateGmaps() {
+  var a = $('gm-link');
+  if (!originLL && !destLL) { a.hidden = true; return; }
+  a.hidden = false;
+  a.href = 'https://www.google.com/maps/dir/?api=1&travelmode=transit'
+    + (originLL ? '&origin=' + originLL.lat + ',' + originLL.lng : '')
+    + (destLL ? '&destination=' + destLL.lat + ',' + destLL.lng : '');
+}
+
+// ───────── Autocomplete (Nominatim) ─────────
+var acTimers = {}, acActive = { orig:-1, dest:-1 };
+
+function setupAc(name, onSelect) {
+  var inp = $(name + '-input'), drop = $(name + '-drop');
+  inp.addEventListener('input', function() {
+    dirty[name] = true;
+    clearTimeout(acTimers[name]);
+    var q = inp.value.trim();
+    if (q.length < 3) { drop.classList.remove('open'); return; }
+    drop.innerHTML = '<div class="ac-msg">Buscando...</div>';
+    drop.classList.add('open');
+    acTimers[name] = setTimeout(function() { fetchSuggest(q, drop, inp, name, onSelect); }, 450);
+  });
+  inp.addEventListener('keydown', function(e) {
+    var items = drop.querySelectorAll('.ac-item');
+    if (e.key === 'Escape') { drop.classList.remove('open'); return; }
+    if (!items.length) { if (e.key === 'Enter' && name === 'dest') tracarRota(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); acActive[name] = Math.min(acActive[name]+1, items.length-1); hl(items, acActive[name]); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); acActive[name] = Math.max(acActive[name]-1, 0); hl(items, acActive[name]); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (items[acActive[name]]) items[acActive[name]].click(); else if (name === 'dest') tracarRota(); }
+  });
+  inp.addEventListener('blur', function() { setTimeout(function() { drop.classList.remove('open'); }, 200); });
+}
+function hl(items, idx) {
+  items.forEach(function(el, i) { el.classList.toggle('active', i === idx); });
+  if (items[idx]) items[idx].scrollIntoView({ block:'nearest' });
+}
+
+function fetchSuggest(q, drop, inp, name, onSelect) {
+  acActive[name] = -1;
+  fetch(NOM_URL + encodeURIComponent(q + ', Rio de Janeiro'))
+    .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(data) {
+      drop.innerHTML = '';
+      if (!data.length) { drop.innerHTML = '<div class="ac-msg">Nenhum resultado</div>'; return; }
+      data.forEach(function(item) {
+        var ad = item.address || {};
+        var main = ad.road || ad.amenity || ad.shop || ad.suburb || ad.neighbourhood || item.display_name.split(',')[0];
+        var sub = [ad.suburb || ad.neighbourhood, ad.city_district, ad.city || 'Rio de Janeiro'].filter(Boolean).join(', ');
+        var div = document.createElement('div'); div.className = 'ac-item';
+        var ic = document.createElement('span'); ic.className = 'ac-icon'; ic.textContent = placeIcon(item.type || item.class);
+        var box = document.createElement('div');
+        var m = document.createElement('div'); m.className = 'ac-main'; m.textContent = main;
+        var s = document.createElement('div'); s.className = 'ac-sub'; s.textContent = sub;
+        box.appendChild(m); box.appendChild(s); div.appendChild(ic); div.appendChild(box);
+        div.addEventListener('mousedown', function(e) { e.preventDefault(); });
+        div.addEventListener('click', function() {
+          inp.value = main + (ad.suburb ? ', ' + ad.suburb : '');
+          dirty[name] = false;
+          drop.classList.remove('open');
+          onSelect(parseFloat(item.lat), parseFloat(item.lon), main);
+        });
+        drop.appendChild(div);
+      });
+    })
+    .catch(function() {
+      drop.innerHTML = '<div class="ac-msg">Não foi possível buscar sugestões agora.</div>';
+    });
+}
+
+function placeIcon(type) {
+  var icons = { bus:'🚌', subway:'🚇', station:'🚆', train:'🚆', hospital:'🏥', school:'🏫', university:'🎓', park:'🌳', beach:'🏖️', stadium:'🏟️',
+    mall:'🛍️', supermarket:'🛒', restaurant:'🍽️', cafe:'☕', hotel:'🏨', fuel:'⛽', museum:'🏛️', church:'⛪', bank:'🏦' };
+  var t = String(type || '').toLowerCase();
+  for (var k in icons) if (t.indexOf(k) >= 0) return icons[k];
+  return '📍';
+}
+
+setupAc('orig', function(lat, lng, label) { setOrigem(lat, lng, label); map.setView([lat,lng], 15); });
+setupAc('dest', function(lat, lng, label) { setDestino(lat, lng, label); });
+
+// ───────── GPS e botão Traçar ─────────
+$('btn-gps').addEventListener('click', function() {
+  if (!navigator.geolocation) { showToast('Seu navegador não suporta localização. Digite a origem.', 'error', 6000); return; }
+  setStatus('wait', null, 'Obtendo sua localização...');
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    setOrigem(pos.coords.latitude, pos.coords.longitude, 'GPS');
+    map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+    $('orig-input').value = 'Minha localização (GPS)'; dirty.orig = false;
+    showToast('📍 Localização obtida', 'ok', 2500);
+    showFreshness();
+  }, function(err) {
+    var msgs = { 1:'🔒 Permissão de localização negada. Digite a origem ou toque no mapa.',
+                 2:'📡 Posição indisponível. Digite a origem ou toque no mapa.',
+                 3:'⏱ Tempo esgotado ao obter o GPS. Digite a origem ou toque no mapa.' };
+    showToast(msgs[err.code] || 'Erro ao obter localização.', 'error', 6000);
+    showFreshness();
+  }, { enableHighAccuracy:true, timeout:12000, maximumAge:30000 });
+});
+
+function geocode(text, cb) {
+  return fetch(NOM_URL + encodeURIComponent(text + ', Rio de Janeiro'))
+    .then(function(r) { return r.json(); })
+    .then(function(d) { if (d.length) cb(parseFloat(d[0].lat), parseFloat(d[0].lon), d[0].display_name.split(',')[0]); else showToast('Local não encontrado: ' + text, 'warn', 4000); });
+}
+function tracarRota() {
+  var o = $('orig-input').value.trim(), d = $('dest-input').value.trim(), tasks = [];
+  if (o && dirty.orig) tasks.push(geocode(o, function(la, ln, lb) { dirty.orig = false; setOrigem(la, ln, lb); }));
+  if (d && dirty.dest) tasks.push(geocode(d, function(la, ln, lb) { dirty.dest = false; setDestino(la, ln, lb); }));
+  Promise.all(tasks).catch(function() { showToast('Não foi possível buscar o endereço agora.', 'error', 5000); });
+  if (!tasks.length) { render(); updateGmaps(); }
+}
+$('btn-tracar').addEventListener('click', tracarRota);
+
+// ───────── Filtro de linhas ─────────
+$('line-input').addEventListener('input', function() {
+  filterLines = this.value.split(/[\s,;]+/).map(normLine).filter(Boolean);
+  render();
+});
+
+// ───────── Render ─────────
+function referencia() { return originLL || destLL; }
+
+function render() {
+  var ref = referencia();
+  var list = $('bus-list'), chips = $('chips');
+
+  buses.forEach(function(b) { b._d = ref ? hav(ref.lat, ref.lng, b.lat, b.lng) : null; });
+
+  var visiveis;
+  if (filterLines.length) visiveis = buses.filter(function(b) { return filterLines.indexOf(normLine(b.s)) >= 0; });
+  else if (ref) visiveis = buses.filter(function(b) { return b._d <= RAIO_PERTO_KM; });
+  else visiveis = [];
+
+  visiveis.sort(function(a, c) { return (a._d === null ? 0 : a._d) - (c._d === null ? 0 : c._d); });
+
+  // Linhas que passam perto (chips)
+  chips.hidden = true;
+  if (ref && !filterLines.length) {
+    var perto = {}, pertoB = {};
+    buses.forEach(function(b) {
+      if (b._d !== null && b._d <= 0.8) { if (!(b.s in perto) || b._d < perto[b.s]) perto[b.s] = b._d; }
+      if (destLL && originLL && hav(destLL.lat, destLL.lng, b.lat, b.lng) <= 0.8) pertoB[b.s] = true;
+    });
+    var ls = Object.keys(perto).sort(function(x, y) { return perto[x] - perto[y]; }).slice(0, 14);
+    if (ls.length) {
+      chips.hidden = false;
+      chips.innerHTML = '<div class="chips-label">Linhas com ônibus a até 800 m de ' + (originLL ? 'A' : 'B')
+        + (destLL && originLL ? ' · <span style="color:var(--green)">verde = também há ônibus perto de B (estimativa)</span>' : '') + ' — toque para filtrar</div>';
+      ls.forEach(function(s) {
+        var c = document.createElement('span');
+        c.className = 'chip' + (pertoB[s] ? ' both' : '');
+        c.textContent = s;
+        c.addEventListener('click', function() { $('line-input').value = s; filterLines = [normLine(s)]; render(); });
+        chips.appendChild(c);
+      });
+    }
   }
-  buses.forEach(function(b) {
-    var lat = parseFloat(b.latitude), lng = parseFloat(b.longitude);
-    b._dist = originLL ? hav(originLL.lat, originLL.lng, lat, lng) : null;
-    var prev = prevPos[b.ordem];
-    if (b._dist !== null && prev) {
-      var pd = hav(originLL.lat, originLL.lng, prev.lat, prev.lng);
-      b._approach = b._dist < pd - 0.02;
-      b._away     = b._dist > pd + 0.02;
-    } else { b._approach = false; b._away = false; }
+
+  // Marcadores
+  busLayer.clearLayers();
+  visiveis.slice(0, MAX_MARKERS).forEach(function(b, i) {
+    var near = ref && i === 0;
+    var mk = L.marker([b.lat, b.lng], { icon: mkIcon('<div class="bmarker' + (near ? ' nearest-bus' : '') + '">' + esc(b.s) + '</div>', 40, 24), zIndexOffset: near ? 900 : 500 });
+    var age = ageMin(b.t);
+    mk.bindPopup('<b>Linha ' + esc(b.s) + '</b> · ' + esc(b.id) + '<br>' + b.v + ' km/h' + (age !== null ? '<br>posição de ' + age + ' min atrás' : ''));
+    busLayer.addLayer(mk);
   });
-  buses.sort(function(a, c) {
-    if (a._dist !== null && c._dist !== null) return a._dist - c._dist;
-    if (a._dist !== null) return -1; if (c._dist !== null) return 1; return 0;
-  });
-  var nearKey = buses[0] ? buses[0].ordem : null;
-  Object.keys(busMarkers).forEach(function(k) {
-    var el = busMarkers[k].getElement();
-    if (el) { var div = el.querySelector('.bmarker'); if (div) div.className = 'bmarker' + (k===nearKey&&originLL?' nearest-bus':''); }
-  });
+
+  $('counter').textContent = (filterLines.length || ref) ? visiveis.length + ' ônibus' : buses.length + ' no Rio';
+  $('panel-title').textContent = filterLines.length ? 'Linha ' + filterLines.join(', ') : 'Ônibus mais próximos';
+
+  // Lista
+  if (!buses.length) { list.innerHTML = '<div class="empty">Aguardando dados dos ônibus...</div>'; return; }
+  if (!filterLines.length && !ref) { list.innerHTML = '<div class="empty">Defina a origem (GPS, endereço ou toque no mapa) para ver os ônibus perto de você, ou digite uma linha no filtro.</div>'; return; }
+  if (!visiveis.length) {
+    list.innerHTML = '<div class="empty">' + (filterLines.length ? 'Nenhum ônibus em circulação nessa linha agora.' : 'Nenhum ônibus a até ' + RAIO_PERTO_KM + ' km de você agora.') + '</div>';
+    return;
+  }
   var html = '';
-  buses.slice(0,8).forEach(function(b, i) {
-    var spd    = parseInt(b.velocidade) || 0;
-    var ordem  = String(b.ordem);
-    var dTxt   = b._dist !== null ? fmtDist(b._dist) : '--';
-    var eta    = b._dist !== null ? fmtEta(b._dist, spd) : '';
-    var dirTxt = b._approach ? 'Aproximando'+eta : (b._away ? 'Afastando' : (originLL ? 'Calculando...' : 'Defina sua origem'));
-    var badge  = b._approach ? '<span class="badge b-aprox">aprox.</span>' : (b._away ? '<span class="badge b-longe">afastando</span>' : '');
-    var age    = '';
-    try { var p = (b.dataHora||'').split(' '); if (p[1]) age = p[1].slice(0,5); } catch(e){}
-    html += '<div class="brow'+(i===0&&originLL?' nearest':'')+'"><div class="bid">'+ordem.slice(-5)+'</div>'
-          + '<div class="binfo"><div class="bdist">'+dTxt+' '+badge+'</div><div class="bdir">'+dirTxt+'</div></div>'
-          + '<div><div class="bspd">'+spd+' km/h</div>'
-          + '<div style="font-size:.6rem;color:var(--muted);font-family:\'JetBrains Mono\',monospace;text-align:right">'+age+'</div></div></div>';
+  visiveis.slice(0, 12).forEach(function(b, i) {
+    var dTxt = b._d !== null ? fmtDist(b._d) : '';
+    var prev = prevPos[b.id], approach = false, away = false;
+    if (b._d !== null && prev && ref) {
+      var pd = hav(ref.lat, ref.lng, prev.lat, prev.lng);
+      approach = b._d < pd - 0.03; away = b._d > pd + 0.03;
+    }
+    var eta = (approach && b.v >= 3 && b._d !== null) ? ' · ~' + Math.max(1, Math.round(b._d / b.v * 60)) + ' min' : '';
+    var dir = approach ? 'Aproximando' + eta : (away ? 'Afastando' : (b.d === 'I' ? 'Sentido ida' : b.d === 'V' ? 'Sentido volta' : 'Em circulação'));
+    var badge = approach ? '<span class="badge b-aprox">aprox.</span>' : (away ? '<span class="badge b-longe">afastando</span>' : '');
+    var age = ageMin(b.t);
+    html += '<div class="brow' + (i === 0 && ref ? ' nearest' : '') + '">'
+      + '<div><div class="bline">' + esc(b.s) + '</div><div class="bid">' + esc(b.id) + '</div></div>'
+      + '<div><div class="bdist">' + esc(dTxt) + ' ' + badge + '</div><div class="bdir">' + esc(dir) + '</div></div>'
+      + '<div><div class="bspd">' + b.v + ' km/h</div><div class="bage">' + (age !== null ? age + ' min' : '') + '</div></div>'
+      + '</div>';
   });
   list.innerHTML = html;
 }
 
-// ─────────────────────────────────────────
-//  Fetch GPS
-// ─────────────────────────────────────────
-function applyBuses(arr) {
-  var now = {};
-  arr.forEach(function(b) {
-    // nova API: normaliza campos
-    b.ordem    = b.id_veiculo || b.ordem;
-    b.dataHora = b.datetime   || b.dataHora || '';
-    b.servico  = String(b.servico || '');
-    // filtra apenas linha 298
-    if (b.servico && b.servico !== LINHA) return;
-    var lat = parseFloat(b.latitude||b.lat||0), lng = parseFloat(b.longitude||b.lng||0);
-    if (!lat || !lng) return;
-    b.latitude = lat; b.longitude = lng;
-    var key = b.ordem || (lat+','+lng);
-    b.ordem = String(key);
-    now[key] = b;
-    if (busData[key]) prevPos[key] = { lat: parseFloat(busData[key].latitude), lng: parseFloat(busData[key].longitude) };
-    if (busMarkers[key]) {
-      busMarkers[key].setLatLng([lat, lng]);
-      busMarkers[key].setPopupContent('<b>Ônibus '+key+'</b><br>Vel: '+(b.velocidade||'--')+' km/h<br>'+b.dataHora);
-    } else {
-      var html = '<div class="bmarker">'+String(key).slice(-4)+'</div>';
-      var mk = L.marker([lat, lng], { icon: mkIcon(html, [32,32]), zIndexOffset: 500 }).addTo(map);
-      mk.bindPopup('<b>Ônibus '+key+'</b><br>Vel: '+(b.velocidade||'--')+' km/h<br>'+b.dataHora);
-      busMarkers[key] = mk;
-    }
-  });
-  Object.keys(busMarkers).forEach(function(k) {
-    if (!now[k]) { map.removeLayer(busMarkers[k]); delete busMarkers[k]; }
-  });
-  busData = now;
-  return Object.keys(now).length;
+// ───────── Dados ─────────
+function showFreshness() {
+  if (!dataUpdated) return;
+  var t = rioMs(dataUpdated), min = isNaN(t) ? null : Math.round((Date.now() - t) / 60000);
+  var hora = String(dataUpdated).slice(11, 16);
+  var cls = min === null ? 'wait' : (min <= 12 ? 'live' : (min <= 30 ? 'wait' : 'err'));
+  setStatus(cls, 'Ônibus ao vivo', 'Dados de ' + hora + (min !== null ? ' (há ' + min + ' min)' : '') + ' · SMTR/Rio');
 }
 
-function fetchGPS() {
-  setStatus('wait', 'Atualizando...');
-  var urls = [buildGpsUrl()], idx = 0;
-  function tryNext() {
-    if (idx >= urls.length) {
-      var semInternet = !navigator.onLine;
-      var msg = semInternet
-        ? '📶 Sem internet. Os dados voltam automaticamente quando conectar.'
-        : '⚠️ API da SMTR indisponível no momento. Tentando novamente em 30s.';
-      setStatus('err', semInternet ? 'Sem internet' : 'API indisponível');
-      if (!apiErrorState) {
-        apiErrorState = true;
-        showToast(msg, 'error', 6000);
-        document.getElementById('bus-list').innerHTML =
-          '<div class="empty" style="color:var(--red)">' + msg + '</div>';
-      }
-      return;
-    }
-    var url = urls[idx++];
-    fetch(url)
-      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function(data) {
-        var arr   = Array.isArray(data) ? data : (data.gps || data.veiculos || []);
-        if (apiErrorState) { apiErrorState = false; showToast('✅ Conexão restabelecida!', 'ok', 3000); }
-        var count = applyBuses(arr);
-        var t = new Date();
-        document.getElementById('last-upd').textContent =
-          String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0')+':'+String(t.getSeconds()).padStart(2,'0');
-        document.getElementById('counter').textContent  = count + ' ônibus';
-        document.getElementById('title-txt').textContent = 'Linha 298' + (count>0?' — '+count+' ativos':' — Sem dados');
-        setStatus(count>0?'live':'wait', count>0?'Ao vivo':'Sem ônibus ativos');
-        renderLista();
-        if (count > 0 && !originLL) {
-          var pts = Object.values(busMarkers).map(function(m){ return m.getLatLng(); });
-          try { map.fitBounds(L.latLngBounds(pts), {padding:[50,50], maxZoom:14}); } catch(e){}
-        }
-      })
-      .catch(function() { tryNext(); });
-  }
-  tryNext();
+function carregar() {
+  fetch(DATA_URL + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(j) {
+      var anterior = {};
+      buses.forEach(function(b) { anterior[b.id] = { lat: b.lat, lng: b.lng }; });
+      prevPos = anterior;
+      buses = (j.buses || []).map(function(a) { return { s:String(a[0]), id:String(a[1]), lat:a[2], lng:a[3], v:a[4] || 0, d:a[5], t:a[6] }; });
+      dataUpdated = j.updated;
+      if (apiErrorState) { apiErrorState = false; showToast('✅ Dados atualizados', 'ok', 2500); }
+      showFreshness();
+      render();
+    })
+    .catch(function(e) {
+      var msg;
+      if (!navigator.onLine) msg = '📶 Sem internet no aparelho. Atualiza sozinho quando voltar.';
+      else if (String(e.message).indexOf('404') >= 0) msg = '⏳ Dados ainda não publicados. O primeiro ciclo leva até 10 min.';
+      else msg = '⚠️ Não foi possível carregar os dados (' + e.message + '). Nova tentativa em 1 min.';
+      setStatus('err', null, msg.replace(/^\S+\s/, ''));
+      if (!apiErrorState) { apiErrorState = true; showToast(msg, 'error', 6000); }
+    });
 }
 
-function setStatus(cls, msg) {
-  document.getElementById('sdot').className = 'dot ' + cls;
-  document.getElementById('sub-txt').textContent = msg + ' · GPS SMTR';
-}
-
-// ─────────────────────────────────────────
-//  Init
-// ─────────────────────────────────────────
-fetchGPS();
-setInterval(fetchGPS, INTERVAL);
+carregar();
+setInterval(carregar, REFRESH);
+window.addEventListener('online', carregar);
 </script>
 </body>
 </html>
