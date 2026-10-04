@@ -341,7 +341,7 @@
       var barCls = 'cbar'+(isLdr?' lead':(isMeu?' minha':''));
       var pctCls = 'cpct'+(isLdr?' lead':(isMeu?' minha':''));
       var posCls = rpos===0?'cpos p1':'cpos';
-      var pctTxt = pvap>0?pvap.toFixed(1)+'%':'--';
+      var pctTxt = pvap>0?pvap.toFixed(2)+'%':'--';
 
       var badge='';
       if (sit==='EL'||sit==='E') badge='<span class="badge b-el">EL</span>';
@@ -381,7 +381,7 @@
           var hg = String(d.hg || ''); if (hg > tseHg) tseHg = hg;
           var pe=document.getElementById(cfg.pstId);
           var pst=(d.s&&d.s.pst!=null)?d.s.pst:d.pst;
-          if(pe&&pst!=null) pe.textContent=num(pst).toFixed(1)+'%';
+          if(pe&&pst!=null) pe.textContent=num(pst).toFixed(2)+'%';
           var mx=0; for(var i=0;i<cs.length;i++){ if(cs[i].pvap>mx) mx=cs[i].pvap; }
           renderRows(cfg,cs,mx); cb(true);
         }catch(e){cb(false);}
