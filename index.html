@@ -666,7 +666,7 @@ function renderTripGroups(list) {
       });
     });
   }
-  if (nPerto > 0) secao('Embarque a até ' + RAIO_EMBARQUE_M + ' m de A', 0, nPerto, 6);
+  if (nPerto > 0) secao('Embarque a até ' + RAIO_EMBARQUE_M + ' m da localização', 0, nPerto, 6);
   else {
     var aviso = document.createElement('div'); aviso.className = 'tnote'; aviso.style.color = 'var(--yellow)';
     aviso.textContent = 'Nenhuma linha com parada a até ' + RAIO_EMBARQUE_M + ' m de A leva até B agora. Estas são opções com caminhada maior.';
