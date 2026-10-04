@@ -87,17 +87,32 @@
   #countdown-timer { font-family: 'JetBrains Mono', monospace; font-size: clamp(1.6rem,7vw,2.2rem); font-weight: 600; color: var(--yellow); }
   #countdown-sub { font-size: .65rem; color: var(--fg-muted); margin-top: 2px; }
 
-  /* ── Grade principal ── */
+  /* ── Grade principal: 2 colunas; os blocos podem ser arrastados entre/dentro delas ── */
   .grade {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 6px;
+    align-items: start;
   }
+  .coluna { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 80px; }
 
-  .area-pres   { grid-column: 1; grid-row: 1; }
-  .area-govs   { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; gap: 6px; }
-  .area-senado { grid-column: 1; grid-row: 2; }
-  .area-deps   { grid-column: 1 / 3; grid-row: 3; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  /* Arrastar blocos */
+  .card-head { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .grip { color: var(--fg-muted); font-size: .8rem; margin-right: 6px; letter-spacing: -1px; flex-shrink: 0; }
+  .card.arrastando {
+    position: fixed; z-index: 100; margin: 0; pointer-events: none;
+    box-shadow: 0 12px 32px rgba(0,0,0,.55); transform: scale(1.02); opacity: .96;
+  }
+  .card.arrastando .card-head { cursor: grabbing; }
+  .ph { border: 2px dashed var(--border); border-radius: 10px; background: transparent; }
+  body.arrastando-ativo { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+  .ctl { display: inline-flex; gap: 3px; margin-left: 6px; flex-shrink: 0; align-self: center; }
+  .ctl button { width: 20px; height: 20px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface); color: var(--fg-muted); font-size: .85rem; line-height: 1; cursor: pointer; padding: 0; font-family: inherit; }
+  .ctl button:hover:not(:disabled) { color: var(--fg); border-color: var(--fg-muted); }
+  .ctl button:disabled { opacity: .3; cursor: default; }
+  #dica { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: .64rem; color: var(--fg-muted); }
+  #btn-reset-layout { background: var(--surface); border: 1px solid var(--border); color: var(--fg-muted); border-radius: 8px; font-size: .64rem; padding: 4px 9px; cursor: pointer; font-family: inherit; }
+  #btn-reset-layout:hover { color: var(--fg); }
 
   /* ── Card ── */
   .card {
@@ -173,6 +188,11 @@
   .esp { padding: 10px; text-align: center; font-size: .7rem; color: var(--fg-muted); }
 
   /* Senado: destaque dos 2 vagas */
+  /* Título nunca é cortado: se faltar espaço, a % e os botões −/+ descem para a linha de baixo */
+  .card .card-head { flex-wrap: wrap; row-gap: 3px; align-items: center; }
+  .card .card-head .cn { flex: 1 1 auto; overflow: visible; text-overflow: clip; white-space: nowrap; }
+  .card .card-head .pst { margin-left: auto; }
+
   .senado-vagas {
     font-size: .58rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
     color: var(--fg-muted); padding: 3px 10px;
@@ -199,67 +219,79 @@
   <div id="countdown-sub">Urnas fecham as 17h · Horario de Brasilia</div>
 </div>
 
-<div class="grade">
+<div class="grade" id="grade">
 
-  <div class="card area-pres">
-    <div class="card-head">
-      <span class="cn">Presidente</span>
-      <span class="pst" id="pst-presidente">--</span>
-    </div>
-    <div class="card-body" id="rows-presidente"><div class="esp">aguardando...</div></div>
-  </div>
+  <div class="coluna" id="col-0">
 
-  <div class="area-govs">
-    <div class="card">
+    <div class="card" data-id="presidente">
       <div class="card-head">
-        <span class="cn">Gov. RJ</span>
-        <span class="pst" id="pst-governador-rj">--</span>
+        <span class="grip" title="Arraste para reorganizar">⠿</span><span class="cn">Presidente</span>
+        <span class="pst" id="pst-presidente">--</span><span class="ctl"><button type="button" data-act="menos" title="Diminuir o bloco" aria-label="Diminuir o bloco">−</button><button type="button" data-act="mais" title="Aumentar o bloco" aria-label="Aumentar o bloco">+</button></span>
       </div>
-      <div class="card-body" id="rows-governador-rj"><div class="esp">aguardando...</div></div>
+      <div class="card-body" id="rows-presidente"><div class="esp">aguardando...</div></div>
     </div>
-    <div class="card">
-      <div class="card-head">
-        <span class="cn">Gov. Para</span>
-        <span class="pst" id="pst-governador-pa">--</span>
-      </div>
-      <div class="card-body" id="rows-governador-pa"><div class="esp">aguardando...</div></div>
-    </div>
-    <div class="card">
-      <div class="card-head">
-        <span class="cn">Gov. SP</span>
-        <span class="pst" id="pst-governador-sp">--</span>
-      </div>
-      <div class="card-body" id="rows-governador-sp"><div class="esp">aguardando...</div></div>
-    </div>
-  </div>
 
-  <!-- SENADO — 2 vagas em disputa -->
-  <div class="card area-senado">
-    <div class="card-head">
-      <span class="cn">Senado RJ</span>
-      <span class="pst" id="pst-senado-rj">--</span>
-    </div>
-    <div class="senado-vagas">2 vagas · Benedita 131 · Pedro Paulo 555</div>
-    <div class="card-body" id="rows-senado-rj"><div class="esp">aguardando...</div></div>
-  </div>
-
-  <div class="area-deps">
-    <div class="card">
+    <!-- SENADO — 2 vagas em disputa -->
+    <div class="card" data-id="senado-rj">
       <div class="card-head">
-        <span class="cn">Dep. Federal RJ</span>
-        <span class="pst" id="pst-depfed-rj">--</span>
+        <span class="grip" title="Arraste para reorganizar">⠿</span><span class="cn">Senado RJ</span>
+        <span class="pst" id="pst-senado-rj">--</span><span class="ctl"><button type="button" data-act="menos" title="Diminuir o bloco" aria-label="Diminuir o bloco">−</button><button type="button" data-act="mais" title="Aumentar o bloco" aria-label="Aumentar o bloco">+</button></span>
+      </div>
+      <div class="senado-vagas">2 vagas · Benedita 131 · Pedro Paulo 555</div>
+      <div class="card-body" id="rows-senado-rj"><div class="esp">aguardando...</div></div>
+    </div>
+
+    <div class="card" data-id="depfed-rj">
+      <div class="card-head">
+        <span class="grip" title="Arraste para reorganizar">⠿</span><span class="cn">Dep. Federal RJ</span>
+        <span class="pst" id="pst-depfed-rj">--</span><span class="ctl"><button type="button" data-act="menos" title="Diminuir o bloco" aria-label="Diminuir o bloco">−</button><button type="button" data-act="mais" title="Aumentar o bloco" aria-label="Aumentar o bloco">+</button></span>
       </div>
       <div class="card-body" id="rows-depfed-rj"><div class="esp">aguardando...</div></div>
     </div>
-    <div class="card">
+
+  </div>
+
+  <div class="coluna" id="col-1">
+
+    <div class="card" data-id="governador-rj">
       <div class="card-head">
-        <span class="cn">Dep. Estadual RJ</span>
-        <span class="pst" id="pst-depestad-rj">--</span>
+        <span class="grip" title="Arraste para reorganizar">⠿</span><span class="cn">Gov. RJ</span>
+        <span class="pst" id="pst-governador-rj">--</span><span class="ctl"><button type="button" data-act="menos" title="Diminuir o bloco" aria-label="Diminuir o bloco">−</button><button type="button" data-act="mais" title="Aumentar o bloco" aria-label="Aumentar o bloco">+</button></span>
+      </div>
+      <div class="card-body" id="rows-governador-rj"><div class="esp">aguardando...</div></div>
+    </div>
+
+    <div class="card" data-id="governador-pa">
+      <div class="card-head">
+        <span class="grip" title="Arraste para reorganizar">⠿</span><span class="cn">Gov. Para</span>
+        <span class="pst" id="pst-governador-pa">--</span><span class="ctl"><button type="button" data-act="menos" title="Diminuir o bloco" aria-label="Diminuir o bloco">−</button><button type="button" data-act="mais" title="Aumentar o bloco" aria-label="Aumentar o bloco">+</button></span>
+      </div>
+      <div class="card-body" id="rows-governador-pa"><div class="esp">aguardando...</div></div>
+    </div>
+
+    <div class="card" data-id="governador-sp">
+      <div class="card-head">
+        <span class="grip" title="Arraste para reorganizar">⠿</span><span class="cn">Gov. SP</span>
+        <span class="pst" id="pst-governador-sp">--</span><span class="ctl"><button type="button" data-act="menos" title="Diminuir o bloco" aria-label="Diminuir o bloco">−</button><button type="button" data-act="mais" title="Aumentar o bloco" aria-label="Aumentar o bloco">+</button></span>
+      </div>
+      <div class="card-body" id="rows-governador-sp"><div class="esp">aguardando...</div></div>
+    </div>
+
+    <div class="card" data-id="depestad-rj">
+      <div class="card-head">
+        <span class="grip" title="Arraste para reorganizar">⠿</span><span class="cn">Dep. Estadual RJ</span>
+        <span class="pst" id="pst-depestad-rj">--</span><span class="ctl"><button type="button" data-act="menos" title="Diminuir o bloco" aria-label="Diminuir o bloco">−</button><button type="button" data-act="mais" title="Aumentar o bloco" aria-label="Aumentar o bloco">+</button></span>
       </div>
       <div class="card-body" id="rows-depestad-rj"><div class="esp">aguardando...</div></div>
     </div>
+
   </div>
 
+</div>
+
+<div id="dica">
+  <span>Arraste pelo título para reorganizar; use − e + para mudar o tamanho de cada bloco. Fica guardado neste aparelho.</span>
+  <button id="btn-reset-layout" type="button">↺ ordem padrão</button>
 </div>
 
 <script>
@@ -462,6 +494,147 @@
     fetchAll(); setInterval(fetchAll,30000);
   }
   setInterval(tick,1000);
+
+  // ───────── Reorganizar e redimensionar os blocos (mouse e toque) ─────────
+  var LAYOUT_KEY = 'apuracao.layout.v2';
+  var LAYOUT_PADRAO = [
+    ['presidente', 'senado-rj', 'depfed-rj'],
+    ['governador-rj', 'governador-pa', 'governador-sp', 'depestad-rj']
+  ];
+  var ZOOMS = [0.7, 0.85, 1, 1.2, 1.4, 1.7];   // tamanhos possíveis do bloco; índice 2 = normal
+  var Z_NORMAL = 2;
+
+  function colunas() { return [].slice.call(document.querySelectorAll('.coluna')); }
+  function cartoes() { return [].slice.call(document.querySelectorAll('.card[data-id]')); }
+  function zDe(card) { var i = parseInt(card.getAttribute('data-z'), 10); return isNaN(i) ? Z_NORMAL : i; }
+
+  function aplicarZoom(card, idx) {
+    idx = Math.max(0, Math.min(ZOOMS.length - 1, idx));
+    card.setAttribute('data-z', idx);
+    card.style.zoom = idx === Z_NORMAL ? '' : String(ZOOMS[idx]);
+    var mais = card.querySelector('.ctl [data-act="mais"]'), menos = card.querySelector('.ctl [data-act="menos"]');
+    if (mais) mais.disabled = idx >= ZOOMS.length - 1;
+    if (menos) menos.disabled = idx <= 0;
+  }
+
+  function aplicarLayout(layout, zooms) {
+    var cols = colunas(), usados = {};
+    layout.forEach(function(ids, i) {
+      (ids || []).forEach(function(id) {
+        var el = document.querySelector('.card[data-id="' + id + '"]');
+        if (el && cols[i] && !usados[id]) { usados[id] = 1; cols[i].appendChild(el); }
+      });
+    });
+    cartoes().forEach(function(c) {
+      var z = zooms && zooms[c.getAttribute('data-id')];
+      aplicarZoom(c, typeof z === 'number' ? z : Z_NORMAL);
+    });
+  }
+
+  function salvarLayout() {
+    try {
+      var zs = {};
+      cartoes().forEach(function(c) { zs[c.getAttribute('data-id')] = zDe(c); });
+      localStorage.setItem(LAYOUT_KEY, JSON.stringify({
+        cols: colunas().map(function(c) {
+          return [].filter.call(c.children, function(x) { return x.classList.contains('card'); })
+                   .map(function(x) { return x.getAttribute('data-id'); });
+        }),
+        z: zs
+      }));
+    } catch (e) {}
+  }
+
+  (function restaurar() {
+    var l = null;
+    try { l = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch (e) {}
+    if (l && Array.isArray(l.cols) && l.cols.length === 2) aplicarLayout(l.cols, l.z || {});
+    else aplicarLayout(LAYOUT_PADRAO, {});
+  })();
+
+  // Botões − e + de cada bloco
+  document.addEventListener('click', function(e) {
+    var b = e.target.closest ? e.target.closest('.ctl button') : null;
+    if (!b) return;
+    var card = b.closest('.card');
+    if (!card) return;
+    aplicarZoom(card, zDe(card) + (b.getAttribute('data-act') === 'mais' ? 1 : -1));
+    salvarLayout();
+  });
+
+  var arr = null;
+
+  function posicionar(card, x, y, z) { card.style.left = (x / z) + 'px'; card.style.top = (y / z) + 'px'; }
+
+  function moverArraste(e) {
+    if (!arr || e.pointerId !== arr.id) return;
+    arr.ultimoY = e.clientY;
+    posicionar(arr.card, e.clientX - arr.dx, e.clientY - arr.dy, arr.z);
+    // coluna mais perto do ponteiro (no eixo x)
+    var alvo = null, melhor = 1e9;
+    colunas().forEach(function(c) {
+      var r = c.getBoundingClientRect();
+      var d = e.clientX < r.left ? r.left - e.clientX : (e.clientX > r.right ? e.clientX - r.right : 0);
+      if (d < melhor) { melhor = d; alvo = c; }
+    });
+    // posição na coluna: antes do 1º bloco cujo meio está abaixo do ponteiro
+    var ref = null;
+    [].filter.call(alvo.children, function(x) { return x !== arr.ph && x.classList.contains('card'); }).some(function(x) {
+      var r = x.getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { ref = x; return true; }
+      return false;
+    });
+    if (ref) { if (arr.ph.nextSibling !== ref || arr.ph.parentNode !== alvo) alvo.insertBefore(arr.ph, ref); }
+    else if (arr.ph.parentNode !== alvo || arr.ph.nextSibling) alvo.appendChild(arr.ph);
+  }
+
+  function soltarArraste(e) {
+    if (!arr || (e && e.pointerId !== arr.id)) return;
+    var a = arr; arr = null;
+    clearInterval(a.timer);
+    document.removeEventListener('pointermove', moverArraste);
+    document.removeEventListener('pointerup', soltarArraste);
+    document.removeEventListener('pointercancel', soltarArraste);
+    document.body.classList.remove('arrastando-ativo');
+    a.card.classList.remove('arrastando');
+    a.card.style.left = ''; a.card.style.top = ''; a.card.style.width = '';
+    a.ph.parentNode.insertBefore(a.card, a.ph);
+    a.ph.parentNode.removeChild(a.ph);
+    salvarLayout();
+  }
+
+  document.addEventListener('pointerdown', function(e) {
+    if (e.target.closest && e.target.closest('.ctl')) return;          // botões −/+ não iniciam arraste
+    var h = e.target.closest ? e.target.closest('.card-head') : null;
+    if (!h || arr || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    var card = h.closest('.card');
+    if (!card || !card.getAttribute('data-id')) return;
+    e.preventDefault();
+    var z = ZOOMS[zDe(card)];
+    var r = card.getBoundingClientRect();                                // tamanho já com o zoom aplicado
+    var ph = document.createElement('div');
+    ph.className = 'ph'; ph.style.height = r.height + 'px';
+    card.parentNode.insertBefore(ph, card);
+    card.style.width = (r.width / z) + 'px';
+    card.classList.add('arrastando');
+    posicionar(card, r.left, r.top, z);
+    document.body.appendChild(card);
+    document.body.classList.add('arrastando-ativo');
+    arr = { card: card, ph: ph, z: z, dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId, ultimoY: e.clientY, timer: null };
+    arr.timer = setInterval(function() {                                 // rolagem automática perto das bordas
+      if (!arr) return;
+      if (arr.ultimoY < 70) window.scrollBy(0, -14);
+      else if (arr.ultimoY > window.innerHeight - 70) window.scrollBy(0, 14);
+    }, 16);
+    document.addEventListener('pointermove', moverArraste);
+    document.addEventListener('pointerup', soltarArraste);
+    document.addEventListener('pointercancel', soltarArraste);
+  });
+
+  document.getElementById('btn-reset-layout').addEventListener('click', function() {
+    aplicarLayout(LAYOUT_PADRAO, {});
+    try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
+  });
 </script>
 
 </body>
