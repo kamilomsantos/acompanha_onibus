@@ -103,7 +103,31 @@ body { display:flex; flex-direction:column; }
 .tsub { font-size:.72rem; color:var(--muted); margin-top:4px; line-height:1.45; }
 .tsub b { color:var(--green); }
 .tnote { padding:7px 14px; font-size:.62rem; color:var(--muted); border-bottom:1px solid var(--border); line-height:1.4; }
-.waitmk { min-width:26px; height:22px; padding:0 5px; border-radius:11px; background:var(--green); color:#000; border:2px solid #fff; font-family:'JetBrains Mono',monospace; font-size:.62rem; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.6); white-space:nowrap; }
+#side { display:contents; }
+.topbar { order:1; } .search-bar { order:2; } #map { order:3; } .panel { order:4; }
+@media (min-width:800px) {
+  body { flex-direction:row; }
+  #side { display:flex; flex-direction:column; width:400px; flex-shrink:0; height:100%; border-right:1px solid var(--border); background:var(--surf); }
+  .topbar, .search-bar, #map, .panel { order:0; }
+  .panel { flex:1; min-height:0; max-height:none; border-top:none; }
+  #map { flex:1; height:100%; }
+  .toast { bottom:24px; left:calc(50% + 200px); }
+}
+.pt { background:none; border:none; color:var(--blue); font-size:.95rem; cursor:pointer; padding:0 8px 0 0; line-height:1; transition:transform .2s; user-select:none; }
+.panel.min .pt { transform:rotate(180deg); }
+.panel-head { cursor:pointer; }
+#panel-title { flex:1; min-width:0; }
+#panel-sum { display:none; flex:1; min-width:0; text-transform:none; letter-spacing:0; color:var(--fg); font-size:.72rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.panel.min.has-sum #panel-sum { display:block; }
+.panel.min.has-sum #panel-title { display:none; }
+.panel.min { overflow:hidden; }
+.panel.min #panel-body { display:none; }
+.search-top { display:flex; align-items:center; gap:6px; cursor:pointer; font-size:.64rem; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; font-weight:700; }
+.search-top #search-sum { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.search-top .pt { padding:0 2px 0 0; }
+.search-bar.min .search-row { display:none; }
+.search-bar.min .search-top .pt { transform:rotate(180deg); }
+.waitmk { min-width:26px; height:24px; padding:0 8px; border-radius:11px; background:var(--green); color:#000; border:2px solid #fff; font-family:'JetBrains Mono',monospace; font-size:.62rem; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.6); white-space:nowrap; }
 .stopmk { width:14px; height:14px; border-radius:50%; border:3px solid #fff; box-shadow:0 1px 6px rgba(0,0,0,.6); }
 .bmarker { min-width:34px; height:24px; padding:0 5px; border-radius:12px; background:var(--yellow); border:2px solid #000; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:.64rem; font-weight:700; color:#000; box-shadow:0 2px 8px rgba(0,0,0,.6); white-space:nowrap; }
 .bmarker.nearest-bus { background:var(--green); border-color:#fff; }
@@ -113,6 +137,7 @@ body { display:flex; flex-direction:column; }
 </head>
 <body>
 
+<div id="side">
 <div class="topbar">
   <div class="logo">RIO</div>
   <div class="topbar-info">
@@ -123,7 +148,11 @@ body { display:flex; flex-direction:column; }
   <div class="dot wait" id="sdot"></div>
 </div>
 
-<div class="search-bar">
+<div class="search-bar" id="search-bar">
+  <div class="search-top" id="search-top">
+    <span id="search-sum">Origem, destino e filtro de linhas</span>
+    <span class="pt" id="search-arrow">▾</span>
+  </div>
   <div class="search-row">
     <div class="field-wrap">
       <div class="field-icon orig">A</div>
@@ -148,17 +177,22 @@ body { display:flex; flex-direction:column; }
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
-<div id="map"></div>
-
-<div class="panel">
-  <div class="panel-head">
+<div class="panel" id="panel">
+  <div class="panel-head" id="panel-head">
+    <span class="pt" id="panel-arrow">▾</span>
     <span id="panel-title">Ônibus mais próximos</span>
+    <span id="panel-sum"></span>
     <a class="gm-link" id="gm-link" target="_blank" rel="noopener" hidden>Rotas no Google Maps</a>
   </div>
-  <div id="chips" class="chips" hidden></div>
-  <div id="bus-list"><div class="empty">Defina a origem (GPS, endereço ou toque no mapa) para ver os ônibus perto de você.</div></div>
+  <div id="panel-body">
+    <div id="chips" class="chips" hidden></div>
+    <div id="bus-list"><div class="empty">Defina a origem (GPS, endereço ou toque no mapa) para ver os ônibus perto de você.</div></div>
+  </div>
 </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="map"></div>
 
 <script src="planner.js"></script>
 <script>
@@ -409,6 +443,7 @@ function renderTrips() {
     e.textContent = buses.length ? 'Nenhuma linha direta com ônibus a caminho entre A e B agora. Toque em "Rotas no Google Maps" para opções com baldeação.' : 'Sem dados dos ônibus no momento.';
     list.appendChild(e);
     tripLayer.clearLayers();
+    updatePanelSum();
     return;
   }
   tripPlan.slice(0, 10).forEach(function(t, i) {
@@ -417,10 +452,16 @@ function renderTrips() {
       + '<span class="ttot"><b>' + t.total + ' min</b> · chega às ' + hhmm(t.arrive) + '</span></div>'
       + '<div class="tsub">Ônibus chega ao ponto em <b>' + t.waits.join(', ') + ' min</b> · ' + esc(t.stopA) + ' <span>(' + t.walkAm + ' m a pé)</span></div>'
       + '<div class="tsub">Desça em ' + esc(t.stopB) + ' <span>(' + t.walkBm + ' m até B)</span> · viagem ~' + t.ride + ' min</div>';
-    div.addEventListener('click', function() { tripSel = i; renderTrips(); selectTrip(i, true); });
+    div.addEventListener('click', function() {
+      tripSel = i;
+      if (celular()) $('panel').classList.add('min');
+      renderTrips();
+      setTimeout(function() { map.invalidateSize(); selectTrip(i, true); }, 90);
+    });
     list.appendChild(div);
   });
   if (tripSel >= 0) selectTrip(tripSel, false); else tripLayer.clearLayers();
+  updatePanelSum();
 }
 
 function selectTrip(i, fit) {
@@ -433,18 +474,53 @@ function selectTrip(i, fit) {
   var sa = tripData.stops[t.stopAll.i], sb = tripData.stops[t.stopBll.i];
   tripLayer.addLayer(L.marker([sa[1], sa[2]], { icon: mkIcon('<div class="stopmk" style="background:#22C55E"></div>', 14, 14) }).bindTooltip('Embarque: ' + sa[0]));
   tripLayer.addLayer(L.marker([sb[1], sb[2]], { icon: mkIcon('<div class="stopmk" style="background:#F87171"></div>', 14, 14) }).bindTooltip('Desembarque: ' + sb[0]));
-  t.buses.forEach(function(x) {
-    var aprox = Planner.slice(sh, x.along, t.stopAll.along);
-    aprox.unshift([x.b.lat, x.b.lng]);
-    aprox.push([sa[1], sa[2]]);
-    tripLayer.addLayer(L.polyline(aprox, { color:'#F59E0B', weight:4, opacity:.95, dashArray:'4 9', lineCap:'round' }));
-    tripLayer.addLayer(L.marker([x.b.lat, x.b.lng], { icon: mkIcon('<div class="waitmk">' + Math.max(1, Math.round(x.w)) + ' min</div>', 44, 22), zIndexOffset: 800 })
-      .bindTooltip('Linha ' + t.svc + ' · ' + x.b.id));
+  // do ônibus mais perto do ponto para o mais longe; cada trecho vai até o ônibus da frente (sem sobreposição)
+  var ord = t.buses.slice().sort(function(a, b) { return b.along - a.along; });
+  var prevAlong = t.stopAll.along, prevLL = [sa[1], sa[2]];
+  ord.forEach(function(x, k) {
+    var seg = Planner.slice(sh, x.along, prevAlong);
+    seg.unshift([x.b.lat, x.b.lng]);
+    seg.push(prevLL);
+    tripLayer.addLayer(L.polyline(seg, { color:'#F59E0B', weight:4, opacity: k === 0 ? .95 : .6, dashArray:'4 9', lineCap:'round' }));
+    prevAlong = x.along; prevLL = [x.b.lat, x.b.lng];
+  });
+  ord.forEach(function(x) {
+    var rot = esc(t.svc) + ' · ' + Math.max(1, Math.round(x.w)) + ' min';
+    tripLayer.addLayer(L.marker([x.b.lat, x.b.lng], { icon: mkIcon('<div class="waitmk">🚌 ' + rot + '</div>', 92, 24), zIndexOffset: 900 })
+      .bindTooltip('Linha ' + t.svc + ' · ' + x.b.id + ' · chega ao ponto em ' + Math.max(1, Math.round(x.w)) + ' min'));
   });
   var all = pts.slice();
   var prox = t.buses[0];
   if (prox) all = all.concat(Planner.slice(sh, prox.along, t.stopAll.along), [[prox.b.lat, prox.b.lng]]);
   if (fit && all.length) map.fitBounds(L.latLngBounds(all), { padding:[50,50], maxZoom:16 });
+}
+
+// ───────── Minimizar painéis ─────────
+function refazerMapa() { setTimeout(function() { map.invalidateSize(); }, 80); }
+function celular() { return window.matchMedia('(max-width: 799px)').matches; }
+
+$('panel-head').addEventListener('click', function(e) {
+  if (e.target.closest('a')) return;
+  $('panel').classList.toggle('min');
+  refazerMapa();
+});
+
+function updateSearchSum() {
+  var min = $('search-bar').classList.contains('min'), el = $('search-sum');
+  var o = $('orig-input').value.trim(), d = $('dest-input').value.trim();
+  el.textContent = (min && (o || d)) ? 'A: ' + (o || '—') + '  →  B: ' + (d || '—') : 'Origem, destino e filtro de linhas';
+}
+$('search-top').addEventListener('click', function() {
+  $('search-bar').classList.toggle('min');
+  updateSearchSum();
+  refazerMapa();
+});
+
+function updatePanelSum() {
+  var p = $('panel'), t = (planActive && tripSel >= 0) ? tripPlan[tripSel] : null;
+  if (t) { $('panel-sum').textContent = t.svc + ' → ' + t.head + ' · ' + t.total + ' min · chega às ' + hhmm(t.arrive); p.classList.add('has-sum'); }
+  else if (planActive) { $('panel-sum').textContent = tripPlan.length + (tripPlan.length === 1 ? ' linha' : ' linhas') + ' de A para B'; p.classList.add('has-sum'); }
+  else p.classList.remove('has-sum');
 }
 
 // ───────── Filtro de linhas ─────────
@@ -460,6 +536,7 @@ function referencia() { return originLL || destLL; }
 function render() {
   if (planActive) { renderTrips(); return; }
   tripLayer.clearLayers();
+  updatePanelSum();
   var ref = referencia();
   var list = $('bus-list'), chips = $('chips');
 
