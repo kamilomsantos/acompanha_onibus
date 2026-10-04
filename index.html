@@ -265,6 +265,21 @@ body { display:flex; flex-direction:column; }
   #map { margin:12px; height:calc(100% - 24px); }
   #side { position:relative; } .menu-tema { right:auto; left:190px; }
 }
+
+/* ───────── Botões de recolher maiores e cabeçalho compacto quando recolhido ───────── */
+.search-top { padding:4px 4px 4px 14px; min-height:46px; font-size:.7rem; }
+.search-top .pt, .panel-head .pt { width:40px; height:40px; border-radius:50%; background:var(--surf2); color:var(--fg); font-size:1.3rem; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0; line-height:1; }
+.search-top .pt { order:2; }
+.panel-head { min-height:58px; padding:9px 12px 9px 14px; }
+.panel-head .pt { margin-right:2px; }
+body:has(.search-bar.min) .topbar { padding-top:max(8px, env(safe-area-inset-top)); padding-bottom:0; }
+body:has(.search-bar.min) .topbar-title { font-size:1.15rem; }
+body:has(.search-bar.min) .topbar-sub { display:none; }
+body:has(.search-bar.min) .logo { width:34px; height:34px; font-size:.62rem; }
+body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
+.search-bar.min { padding-bottom:6px; }
+.panel.min { box-shadow:0 -2px 12px rgba(0,0,0,.2); }
+@media (max-width:799px) { .panel { max-height:32vh; } #map { margin-bottom:0; border-radius:22px 22px 0 0; } .panel { margin-top:-18px; position:relative; z-index:6; } }
 </style>
 </head>
 <body>
@@ -741,6 +756,8 @@ function tracarRota() {
         if (!tripData) return;
         planActive = true;
         if (tab !== 'dir') setTab('dir');
+        if (celular()) { $('search-bar').classList.add('min'); updateSearchSum(); }   // celular: recolhe a busca para o mapa ficar maior
+        map.invalidateSize();
         calcularViagens(true);
         salvarRota();
         updateGmaps();
