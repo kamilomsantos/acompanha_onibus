@@ -484,7 +484,7 @@ function renderTrips() {
   list.innerHTML = '';
   var note = document.createElement('div'); note.className = 'tnote';
   note.textContent = 'Atualizado às ' + hhmm(new Date()) + ' · dados dos ônibus de ' + String(dataUpdated || '').slice(11, 16)
-    + ' · estimativa pela grade horária das linhas (linhas diretas, sem baldeação). No mapa: azul = sua viagem, laranja tracejado = ônibus até o ponto de embarque.';
+    + ' · estimativa pela grade horária das linhas (linhas diretas, sem baldeação). No mapa: azul = sua viagem, vermelho tracejado = ônibus até o ponto de embarque.';
   list.appendChild(note);
   var idade = dataUpdated ? Math.round((Date.now() - Planner.rioMs(dataUpdated)) / 60000) : null;
   if (idade !== null && idade > 15) {
@@ -576,7 +576,8 @@ function drawApproach(sh, stopAlong, stopLL, busesArr, svc) {
     var seg = Planner.slice(sh, x.along, prevAlong);
     seg.unshift([x.b.lat, x.b.lng]);
     seg.push(prevLL);
-    tripLayer.addLayer(L.polyline(seg, { color:'#F59E0B', weight:4, opacity: k === 0 ? .95 : .6, dashArray:'4 9', lineCap:'round' }));
+    tripLayer.addLayer(L.polyline(seg, { color:'#FFFFFF', weight:10, opacity: k === 0 ? .9 : .6, lineCap:'round' }));
+    tripLayer.addLayer(L.polyline(seg, { color:'#E11D48', weight:6, opacity: k === 0 ? 1 : .8, dashArray:'12 10', lineCap:'butt' }));
     if (k === 0) fitPts = seg.slice();
     prevAlong = x.along; prevLL = [x.b.lat, x.b.lng];
   });
