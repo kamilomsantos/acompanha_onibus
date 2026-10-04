@@ -174,6 +174,100 @@
     return Object.keys(best).map(function (k) { return best[k]; }).sort(function (a, b) { return a.total - b.total; });
   }
 
+  // Viagens com UMA baldeação A -> (linha X) -> parada de troca -> (linha Y) -> B.
+  // Só considera X e Y com ônibus circulando; a espera pelo Y usa o ônibus ao vivo que chega depois de você.
+  function planBaldeacao(data, buses, A, B, now, opt) {
+    opt = opt || {};
+    var maxWalkA = opt.maxWalkA || 500, maxWalkB = opt.maxWalkB || 700, maxXfer = opt.maxXfer || 300;
+    var vMpm = (opt.vKmh || 15) * 1000 / 60, walkMpm = opt.walkMpm || 80, minX = opt.minRide || 400, minY = opt.minRideY || 300;
+    var maxWait = opt.maxWait || 45, maxWaitY = opt.maxWaitY || 30, maxAge = opt.maxAge || 25, limite = opt.limit || 6;
+    var live = {};
+    buses.forEach(function (b) { (live[b.s] = live[b.s] || []).push(b); });
+    ensureBySvc(data);
+
+    function eta(sh, lv, alongStop) {
+      var useT = temGrade(sh), out = [];
+      busesOnShape(sh, lv, 150, data.bySvc[sh.r]).forEach(function (o) {
+        if (o.along > alongStop + 30) return;
+        var idade = ageMin(o.b.t, now);
+        if (idade > maxAge) return;
+        var falta = useT ? Math.max(0, tAt(sh, alongStop) - tAt(sh, o.along)) : (alongStop - o.along) / vMpm;
+        out.push({ w: Math.max(0, falta - idade), b: o.b, along: o.along });
+      });
+      return out.sort(function (x, y) { return x.w - y.w; });
+    }
+    function viagem(sh, de, ate) { return temGrade(sh) ? tAt(sh, ate) - tAt(sh, de) : (ate - de) / vMpm; }
+
+    var xs = [], ys = [];
+    Object.keys(data.shapes).forEach(function (sid) {
+      var sh = data.shapes[sid], lv = live[sh.r];
+      if (!lv) return;
+      prep(sh);
+      var sa = null, sb = null;
+      sh.s.forEach(function (st) {
+        var s = data.stops[st[0]], da = hav(A.lat, A.lng, s[1], s[2]), db = hav(B.lat, B.lng, s[1], s[2]);
+        if (da <= maxWalkA && (!sa || da < sa.d)) sa = { d: da, i: st[0], along: st[1] };
+        if (db <= maxWalkB && (!sb || db < sb.d)) sb = { d: db, i: st[0], along: st[1] };
+      });
+      if (sa) {
+        var ws = eta(sh, lv, sa.along).filter(function (x) { return x.w >= sa.d / walkMpm * 0.9 && x.w <= maxWait; });
+        if (ws.length) xs.push({ sh: sh, sid: sid, sa: sa, waits: ws });
+      }
+      if (sb) ys.push({ sh: sh, sid: sid, sb: sb, lv: lv });
+    });
+
+    var melhor = {};
+    xs.forEach(function (X) {
+      ys.forEach(function (Y) {
+        if (X.sh.r === Y.sh.r) return;
+        var cands = [];
+        X.sh.s.forEach(function (xt) {
+          if (xt[1] < X.sa.along + minX) return;
+          var px = data.stops[xt[0]];
+          Y.sh.s.forEach(function (yt) {
+            if (yt[1] > Y.sb.along - minY) return;
+            var py = data.stops[yt[0]];
+            if (Math.abs(px[1] - py[1]) > 0.004 || Math.abs(px[2] - py[2]) > 0.004) return;
+            var d = hav(px[1], px[2], py[1], py[2]);
+            if (d > maxXfer) return;
+            cands.push({ xt: xt, yt: yt, d: d, c: viagem(X.sh, X.sa.along, xt[1]) + d / walkMpm * 1.5 + viagem(Y.sh, yt[1], Y.sb.along) });
+          });
+        });
+        cands.sort(function (p, q) { return p.c - q.c; });
+        var w1 = X.waits[0].w;
+        for (var k = 0; k < cands.length && k < 6; k++) {
+          var c = cands[k], rideX = viagem(X.sh, X.sa.along, c.xt[1]);
+          var chega = w1 + rideX + c.d / walkMpm;
+          var todos = eta(Y.sh, Y.lv, c.yt[1]);
+          var ey = todos.filter(function (x) { return x.w >= chega - 0.5 && x.w - chega <= maxWaitY; }), est = false;
+          if (!ey.length) {
+            // sem ônibus previsto para a hora da troca: estima o intervalo pela quantidade de ônibus em circulação na linha
+            if (!todos.length) continue;
+            var dur = temGrade(Y.sh) ? Y.sh.s[Y.sh.s.length - 1][2] - Y.sh.s[0][2] : Y.sh.cum[Y.sh.n - 1] / vMpm;
+            var esp = Math.min(20, Math.max(3, dur / todos.length / 2));
+            ey = [{ w: chega + esp, b: null, along: 0 }]; est = true;
+          }
+          var rideY = viagem(Y.sh, c.yt[1], Y.sb.along), walkB = Y.sb.d / walkMpm;
+          var total = ey[0].w + rideY + walkB;
+          var key = X.sh.r + '|' + X.sh.d + '>' + Y.sh.r + '|' + Y.sh.d;
+          if (melhor[key] && melhor[key].total <= total) break;
+          melhor[key] = {
+            total: Math.max(1, Math.round(total)), est: est, arrive: new Date(now + total * 60000), walkT: Math.round(c.d), esperaT: Math.max(0, Math.round(ey[0].w - chega)),
+            x: { svc: X.sh.r, sid: X.sid, dir: X.sh.d, head: X.sh.h, modal: X.sh.m || '', stopA: data.stops[X.sa.i][0], walkAm: Math.round(X.sa.d), stopAll: X.sa,
+                 stopT: data.stops[c.xt[0]][0], stopTll: { i: c.xt[0], along: c.xt[1] }, ride: Math.max(1, Math.round(rideX)),
+                 waits: X.waits.slice(0, 3).map(function (x) { return Math.max(1, Math.round(x.w)); }), buses: X.waits.slice(0, 3) },
+            y: { svc: Y.sh.r, sid: Y.sid, dir: Y.sh.d, head: Y.sh.h, modal: Y.sh.m || '', stopT: data.stops[c.yt[0]][0], stopTll: { i: c.yt[0], along: c.yt[1] },
+                 stopB: data.stops[Y.sb.i][0], walkBm: Math.round(Y.sb.d), stopBll: Y.sb, ride: Math.max(1, Math.round(rideY)),
+                 waits: ey.slice(0, 2).map(function (x) { return Math.max(1, Math.round(x.w - chega + 0)); }), buses: ey.filter(function (x) { return x.b; }).slice(0, 2) }
+          };
+          break;
+        }
+      });
+    });
+    return Object.keys(melhor).map(function (k) { melhor[k].key = k; return melhor[k]; })
+      .sort(function (a, b) { return a.total - b.total; }).slice(0, limite);
+  }
+
   // Pontos do traçado entre duas posições (m) para desenhar no mapa.
   function slice(sh, from, to) {
     prep(sh);
@@ -294,6 +388,6 @@
     return out;
   }
 
-  var api = { consolidarBRT: consolidarBRT, consolidar: consolidar, linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
+  var api = { consolidarBRT: consolidarBRT, consolidar: consolidar, linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, planBaldeacao: planBaldeacao, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Planner = api;
 })(typeof window !== 'undefined' ? window : this);

@@ -691,7 +691,7 @@ function ensureLinhas() {
 function hhmm(d) { return d.toLocaleTimeString('pt-BR', { timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit' }); }
 
 var RAIO_EMBARQUE_M = 200, nPerto = 0;
-var tripSelKey = null;
+var tripSelKey = null, baldPlan = [], baldSel = -1, baldSelKey = null;
 function tripKey(t) { return t.svc + '|' + t.dir; }
 
 // novo = true: cálculo iniciado pelo usuário (Traçar ou mudança do filtro); false: atualização automática
@@ -710,10 +710,23 @@ function calcularViagens(novo) {
     tripPlan = tripPlan.filter(function(t) { return filterLines.indexOf(normLine(t.svc)) >= 0; });
     nPerto = tripPlan.filter(function(t) { return t.walkAm <= RAIO_EMBARQUE_M; }).length;
   }
+  // baldeação: só quando não há linha direta, ou quando ela poupa 10 min ou mais
+  baldPlan = [];
+  if (!filterLines.length) {
+    try {
+      var melhorDireta = tripPlan.length ? tripPlan[0].total : 1e9;
+      baldPlan = Planner.planBaldeacao(tripData, buses, originLL, destLL, agora, {})
+        .filter(function(b) { return b.total < melhorDireta - 10; });
+    } catch (e) { baldPlan = []; }
+  }
+  baldSel = -1;
+  if (baldSelKey) baldPlan.forEach(function(b, i) { if (b.key === baldSelKey) baldSel = i; });
+  if (baldSel >= 0) tripSelKey = null;
   if (novo) tripSelKey = (filterLines.length && tripPlan.length) ? tripKey(tripPlan[0]) : null;
   tripSel = -1;
   if (tripSelKey) tripPlan.forEach(function(t, i) { if (tripKey(t) === tripSelKey) tripSel = i; });
   renderTrips();
+  if (novo && tripSel < 0) baldSelKey = null;
   if (novo && tripSel >= 0) {
     if (celular()) $('panel').classList.add('min');
     setTimeout(function() { map.invalidateSize(); selectTrip(tripSel, true); }, 90);
@@ -725,11 +738,11 @@ function renderTrips() {
   $('chips').hidden = true;
   busLayer.clearLayers();
   $('panel-title').textContent = 'Viagens de A para B';
-  $('counter').textContent = tripPlan.length + (tripPlan.length === 1 ? ' linha' : ' linhas');
+  $('counter').textContent = tripPlan.length + (tripPlan.length === 1 ? ' linha' : ' linhas') + (baldPlan.length ? ' + ' + baldPlan.length + ' c/ baldeação' : '');
   list.innerHTML = '';
   var note = document.createElement('div'); note.className = 'tnote';
   note.textContent = 'Atualizado às ' + hhmm(new Date()) + ' · dados dos ônibus de ' + String(dataUpdated || '').slice(11, 16)
-    + ' · estimativa pela grade horária das linhas (linhas diretas, sem baldeação). No mapa: azul = sua viagem, vermelho tracejado = ônibus até o ponto de embarque.';
+    + ' · estimativa pela grade horária das linhas (linhas diretas; baldeação só quando não há direta ou poupa 10 min ou mais). No mapa: azul = sua viagem, vermelho tracejado = ônibus até o ponto de embarque.';
   list.appendChild(note);
   var idade = dataUpdated ? Math.round((Date.now() - Planner.rioMs(dataUpdated)) / 60000) : null;
   if (idade !== null && idade > 15) {
@@ -737,18 +750,19 @@ function renderTrips() {
     aviso.textContent = '⚠️ Os dados dos ônibus estão com ' + idade + ' min de atraso (a coleta automática ainda não atualizou). A estimativa pode estar errada.';
     list.appendChild(aviso);
   }
-  if (!tripPlan.length) {
+  if (!tripPlan.length && !baldPlan.length) {
     var e = document.createElement('div'); e.className = 'empty';
     e.textContent = !buses.length ? 'Sem dados dos ônibus no momento.'
       : filterLines.length ? 'A linha ' + filterLines.join(', ') + ' não tem ônibus a caminho de A para B agora (ou não passa perto dos dois pontos). Apague o filtro de linhas para ver as outras.'
-      : 'Nenhuma linha direta com ônibus a caminho entre A e B agora. Toque em "Rotas no Google Maps" para opções com baldeação.';
+      : 'Nenhuma linha direta nem com uma baldeação, com ônibus a caminho, entre A e B agora. Toque em "Rotas no Google Maps" para outras opções.';
     list.appendChild(e);
     tripLayer.clearLayers();
     updatePanelSum();
     return;
   }
-  renderTripGroups(list);
-  if (tripSel >= 0) selectTrip(tripSel, false); else tripLayer.clearLayers();
+  if (tripPlan.length) renderTripGroups(list);
+  renderBaldeacoes(list);
+  if (tripSel >= 0) selectTrip(tripSel, false); else if (baldSel >= 0) selectBald(baldSel, false); else tripLayer.clearLayers();
   updatePanelSum();
 }
 
@@ -759,7 +773,7 @@ function tripCard(t, i) {
     + '<div class="tsub">Ônibus chega ao ponto em <b>' + t.waits.join(', ') + ' min</b></div>'
     + '<div class="tsub">Desça em ' + esc(t.stopB) + ' <span>(' + t.walkBm + ' m até B)</span> · viagem ~' + t.ride + ' min</div>';
   div.addEventListener('click', function() {
-    tripSel = i; tripSelKey = tripKey(t);
+    tripSel = i; tripSelKey = tripKey(t); baldSel = -1; baldSelKey = null;
     if (celular()) $('panel').classList.add('min');
     renderTrips();
     setTimeout(function() { map.invalidateSize(); selectTrip(i, true); }, 90);
@@ -796,6 +810,49 @@ function renderTripGroups(list) {
     list.appendChild(aviso);
   }
   secao(nPerto > 0 ? 'Mais opções (paradas mais distantes)' : 'Opções com paradas mais distantes', nPerto, tripPlan.length, 4);
+}
+
+function legHTML(L1, tipo) {
+  return '<span class="tline' + (L1.modal === 'B' ? ' brt' : '') + '">' + esc(L1.svc) + '</span> ';
+}
+
+function baldCard(b, i) {
+  var div = document.createElement('div'); div.className = 'trip' + (i === baldSel ? ' sel' : '');
+  div.innerHTML = '<div class="trip-top">' + legHTML(b.x) + '<span class="thead">→ baldeação →</span> ' + legHTML(b.y)
+    + '<span class="ttot"><b>' + b.total + ' min</b> · chega às ' + hhmm(b.arrive) + '</span></div>'
+    + '<div class="tsub">1) Embarque em ' + esc(b.x.stopA) + ' (' + b.x.walkAm + ' m a pé): ônibus ' + esc(b.x.svc) + ' chega em <b>' + b.x.waits.join(', ') + ' min</b> · ~' + b.x.ride + ' min de viagem</div>'
+    + '<div class="tsub">2) Desça em ' + esc(b.x.stopT) + (b.walkT > 30 ? ' e caminhe ' + b.walkT + ' m até ' + esc(b.y.stopT) : '') + ' · espera ~' + b.esperaT + ' min pelo ' + esc(b.y.svc) + (b.est ? ' (estimado: sem ônibus previsto nessa hora)' : '') + '</div>'
+    + '<div class="tsub">3) Desça em ' + esc(b.y.stopB) + ' <span>(' + b.y.walkBm + ' m até B)</span> · viagem ~' + b.y.ride + ' min</div>';
+  div.addEventListener('click', function() {
+    baldSel = i; baldSelKey = b.key; tripSel = -1; tripSelKey = null;
+    if (celular()) $('panel').classList.add('min');
+    renderTrips();
+    setTimeout(function() { map.invalidateSize(); selectBald(i, true); }, 90);
+  });
+  return div;
+}
+
+function renderBaldeacoes(list) {
+  if (!baldPlan.length) return;
+  var h = document.createElement('div'); h.className = 'tsec';
+  h.textContent = tripPlan.length ? 'Com uma baldeação (mais rápidas que as diretas)' : 'Com uma baldeação (não há linha direta)';
+  list.appendChild(h);
+  baldPlan.forEach(function(b, i) { list.appendChild(baldCard(b, i)); });
+}
+
+function selectBald(i, fit) {
+  var b = baldPlan[i];
+  tripLayer.clearLayers();
+  if (!b) return;
+  var shX = tripData.shapes[b.x.sid], shY = tripData.shapes[b.y.sid];
+  var p1 = Planner.slice(shX, b.x.stopAll.along, b.x.stopTll.along), p2 = Planner.slice(shY, b.y.stopTll.along, b.y.stopBll.along);
+  if (p1.length > 1) tripLayer.addLayer(L.polyline(p1, { color:'#38BDF8', weight:5, opacity:.85 }));
+  if (p2.length > 1) tripLayer.addLayer(L.polyline(p2, { color:'#A78BFA', weight:5, opacity:.9 }));
+  function pt(id, cor, txt) { var s = tripData.stops[id]; tripLayer.addLayer(L.marker([s[1], s[2]], { icon: mkIcon('<div class="stopmk" style="background:' + cor + '"></div>', 14, 14) }).bindTooltip(txt + ': ' + s[0])); }
+  pt(b.x.stopAll.i, '#22C55E', 'Embarque'); pt(b.x.stopTll.i, '#FACC15', 'Troca (desça do ' + b.x.svc + ')'); pt(b.y.stopTll.i, '#FACC15', 'Troca (suba no ' + b.y.svc + ')'); pt(b.y.stopBll.i, '#F87171', 'Desembarque');
+  var saLL = tripData.stops[b.x.stopAll.i], tLL = tripData.stops[b.y.stopTll.i];
+  var all = p1.concat(p2, drawApproach(shX, b.x.stopAll.along, [saLL[1], saLL[2]], b.x.buses, b.x.svc), drawApproach(shY, b.y.stopTll.along, [tLL[1], tLL[2]], b.y.buses.slice(0, 1), b.y.svc));
+  if (fit && all.length) map.fitBounds(L.latLngBounds(all), { padding:[50,50], maxZoom:16 });
 }
 
 function selectTrip(i, fit) {
@@ -1079,7 +1136,8 @@ $('search-top').addEventListener('click', function() {
 function updatePanelSum() {
   var p = $('panel'), t = (planActive && tripSel >= 0) ? tripPlan[tripSel] : null;
   if (t) { $('panel-sum').textContent = t.svc + ' → ' + t.head + ' · ' + t.total + ' min · chega às ' + hhmm(t.arrive); p.classList.add('has-sum'); }
-  else if (planActive) { $('panel-sum').textContent = tripPlan.length + (tripPlan.length === 1 ? ' linha' : ' linhas') + ' de A para B'; p.classList.add('has-sum'); }
+  else if (planActive && baldSel >= 0 && baldPlan[baldSel]) { var bb = baldPlan[baldSel]; $('panel-sum').textContent = bb.x.svc + ' + ' + bb.y.svc + ' (baldeação) · ' + bb.total + ' min · chega às ' + hhmm(bb.arrive); p.classList.add('has-sum'); }
+  else if (planActive) { $('panel-sum').textContent = tripPlan.length + (tripPlan.length === 1 ? ' linha' : ' linhas') + ' de A para B' + (baldPlan.length ? ' + ' + baldPlan.length + ' com baldeação' : ''); p.classList.add('has-sum'); }
   else p.classList.remove('has-sum');
 }
 
