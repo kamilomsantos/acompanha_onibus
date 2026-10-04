@@ -30,8 +30,7 @@ const CSS = `
 .logo { width:44px; height:44px; border-radius:50%; background:var(--accent); color:var(--accent-fg); display:flex; align-items:center; justify-content:center; font-size:.72rem; letter-spacing:.04em; }
 .topbar-title { font-size:1.7rem; font-weight:800; letter-spacing:-.02em; line-height:1.1; }
 .topbar-sub { font-size:.72rem; margin-top:3px; }
-.topbar { flex-wrap:wrap; row-gap:8px; }
-#counter { order:9; margin-left:56px; background:var(--surf2); color:var(--fg); border-radius:999px; padding:6px 12px; font-size:.72rem; }
+#counter { display:none; }   /* o botão de tema ocupa o lugar do contador; o título volta a aparecer inteiro */
 .btn-tema { width:40px; height:40px; border-radius:50%; border:none; background:var(--surf2); color:var(--fg); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
 .btn-tema svg { width:20px; height:20px; }
 .menu-tema { position:absolute; right:14px; top:max(62px, calc(env(safe-area-inset-top) + 52px)); background:var(--surf); border:1px solid var(--border); border-radius:16px; box-shadow:var(--sombra); padding:6px; z-index:4000; min-width:190px; }
