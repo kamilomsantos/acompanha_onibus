@@ -115,6 +115,11 @@ body { display:flex; flex-direction:column; }
 .tsep { display:flex; align-items:center; gap:8px; padding:0 14px; font-size:.64rem; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; }
 .tsep::before, .tsep::after { content:''; flex:1; height:1px; background:var(--border); }
 .tgroup + .trip, .tsep + .trip { border-bottom:none; }
+.tsec.ok { color:var(--green); }
+.tgroup.ponto { box-shadow:inset 3px 0 0 var(--green); }
+.stopcnt { width:22px; height:22px; border-radius:50%; background:#64748B; color:#fff; border:2px solid #fff; font-family:'JetBrains Mono',monospace; font-size:.62rem; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,.6); }
+.stopcnt.perto { background:var(--green); color:#000; }
+.lrow .badge { align-self:center; }
 .refpick { display:inline-flex; gap:4px; margin-left:6px; vertical-align:middle; }
 .refpick button { background:var(--surf2); border:1px solid var(--border); color:var(--fg); border-radius:6px; font-size:.64rem; font-weight:700; padding:1px 8px; cursor:pointer; }
 .refpick button.on { background:var(--yellow); color:#000; border-color:var(--yellow); }
@@ -645,22 +650,61 @@ function renderLinhas() {
     list.appendChild(e);
     return;
   }
-  var selItem = null;
-  vis.slice(0, 80).forEach(function(l) {
-    var key = l.svc + '|' + l.dir, sel = key === linhaSelKey;
-    if (sel) selItem = l;
-    var div = document.createElement('div'); div.className = 'lrow' + (sel ? ' sel' : '');
-    var quando = l.waits.length ? '<span class="ttot">em ' + l.waits[0] + ' min</span>'
-      : '<span class="ttot off">' + (l.emCirculacao ? 'nenhum ônibus a caminho' : 'sem ônibus agora') + '</span>';
-    div.innerHTML = '<div class="trip-top"><span class="tline">' + esc(l.svc) + '</span><span class="thead">→ ' + esc(l.head) + '</span>' + quando + '</div>'
-      + '<div class="tsub">' + esc(l.stop) + ' · ' + l.dist + ' m a pé' + (l.waits.length > 1 ? ' · depois <b>' + l.waits.slice(1).join(', ') + ' min</b>' : '') + '</div>';
-    div.addEventListener('click', function() {
-      linhaSelKey = key;
-      if (celular()) $('panel').classList.add('min');
-      renderLinhas();
-      setTimeout(function() { map.invalidateSize(); desenharLinha(l, true); }, 90);
+  var selItem = null, ponto = qual === 'A' ? 'partida' : 'chegada';
+
+  // agrupa por parada (a mais perto primeiro)
+  var grupos = [], porParada = {};
+  vis.forEach(function(l) {
+    var k = l.stop + '|' + l.stopLL[0] + ',' + l.stopLL[1];
+    if (!porParada[k]) { porParada[k] = { stop: l.stop, ll: l.stopLL, dist: l.dist, itens: [] }; grupos.push(porParada[k]); }
+    porParada[k].itens.push(l);
+  });
+  grupos.sort(function(a, b) { return a.dist - b.dist; });
+
+  // mapa: círculo de 200 m e as paradas (verde = até 200 m, cinza = mais longe) com o nº de linhas
+  busLayer.addLayer(L.circle([ref.lat, ref.lng], { radius: RAIO_EMBARQUE_M, color:'#22C55E', weight:1.5, dashArray:'6 6', fillOpacity:.05 }));
+  grupos.forEach(function(g) {
+    var perto = g.dist <= RAIO_EMBARQUE_M;
+    busLayer.addLayer(L.marker(g.ll, { icon: mkIcon('<div class="stopcnt' + (perto ? ' perto' : '') + '">' + g.itens.length + '</div>', 24, 24), zIndexOffset: perto ? 700 : 600 })
+      .bindTooltip(g.stop + ' · ' + g.dist + ' m · linhas: ' + g.itens.map(function(x) { return x.svc; }).join(', ')));
+  });
+
+  if (!grupos.some(function(g) { return g.dist <= RAIO_EMBARQUE_M; })) {
+    var av = document.createElement('div'); av.className = 'tnote'; av.style.color = 'var(--yellow)';
+    av.textContent = 'Nenhuma linha tem parada a até ' + RAIO_EMBARQUE_M + ' m do ponto de ' + ponto + '. Mostrando as paradas mais próximas.';
+    list.appendChild(av);
+  }
+  var secaoAtual = null, n = 0;
+  grupos.forEach(function(g) {
+    if (n >= 80) return;
+    var perto = g.dist <= RAIO_EMBARQUE_M;
+    var nomeSecao = perto ? '✓ Passam pelo ponto de ' + ponto + ' (até ' + RAIO_EMBARQUE_M + ' m)' : 'Mais próximas (até 500 m)';
+    if (nomeSecao !== secaoAtual) {
+      secaoAtual = nomeSecao;
+      var h = document.createElement('div'); h.className = 'tsec' + (perto ? ' ok' : ''); h.textContent = nomeSecao; list.appendChild(h);
+    }
+    var cab = document.createElement('div'); cab.className = 'tgroup' + (perto ? ' ponto' : '');
+    cab.innerHTML = '<span class="tstop">🚏 ' + esc(g.stop) + '</span><span class="twalk">' + g.dist + ' m a pé · '
+      + g.itens.length + (g.itens.length === 1 ? ' linha' : ' linhas') + '</span>';
+    list.appendChild(cab);
+    g.itens.forEach(function(l) {
+      n++;
+      var key = l.svc + '|' + l.dir, sel = key === linhaSelKey;
+      if (sel) selItem = l;
+      var div = document.createElement('div'); div.className = 'lrow' + (sel ? ' sel' : '');
+      var quando = l.waits.length ? '<span class="ttot">em ' + l.waits[0] + ' min</span>'
+        : '<span class="ttot off">' + (l.emCirculacao ? 'nenhum ônibus a caminho' : 'sem ônibus agora') + '</span>';
+      div.innerHTML = '<div class="trip-top"><span class="tline">' + esc(l.svc) + '</span><span class="thead">→ ' + esc(l.head) + '</span>'
+        + (perto ? '<span class="badge b-aprox">no ponto</span>' : '') + quando + '</div>'
+        + (l.waits.length > 1 ? '<div class="tsub">Depois: <b>' + l.waits.slice(1).join(', ') + ' min</b></div>' : '');
+      div.addEventListener('click', function() {
+        linhaSelKey = key;
+        if (celular()) $('panel').classList.add('min');
+        renderLinhas();
+        setTimeout(function() { map.invalidateSize(); desenharLinha(l, true); }, 90);
+      });
+      list.appendChild(div);
     });
-    list.appendChild(div);
   });
   if (selItem) desenharLinha(selItem, false); else tripLayer.clearLayers();
   var panelSum = $('panel-sum'), p = $('panel');
