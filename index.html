@@ -812,12 +812,30 @@ function renderTripGroups(list) {
   secao(nPerto > 0 ? 'Mais opções (paradas mais distantes)' : 'Opções com paradas mais distantes', nPerto, tripPlan.length, 4);
 }
 
-// Trecho a pé: pontilhado preto (com contorno branco para aparecer sobre o mapa)
+// Trecho a pé: pontilhado preto (com contorno branco). Desenha já em linha reta e troca pelo caminho pelas ruas
+// quando o OSRM a pé (routing.openstreetmap.de, gratuito, só mapa aberto) responde; se falhar, fica a linha reta.
+var walkCache = {};
 function walkLine(de, para) {
   if (!de || !para) return;
-  var pts = [[de[0], de[1]], [para[0], para[1]]];
-  tripLayer.addLayer(L.polyline(pts, { color:'#FFFFFF', weight:6, opacity:.85, lineCap:'round' }));
-  tripLayer.addLayer(L.polyline(pts, { color:'#000000', weight:3, opacity:1, dashArray:'1 7', lineCap:'round' }));
+  var grp = L.layerGroup(); tripLayer.addLayer(grp);
+  function desenhar(pts) {
+    grp.clearLayers();
+    grp.addLayer(L.polyline(pts, { color:'#FFFFFF', weight:6, opacity:.85, lineCap:'round' }));
+    grp.addLayer(L.polyline(pts, { color:'#000000', weight:3, opacity:1, dashArray:'1 7', lineCap:'round' }));
+  }
+  desenhar([[de[0], de[1]], [para[0], para[1]]]);
+  if (Math.abs(de[0] - para[0]) < 1e-5 && Math.abs(de[1] - para[1]) < 1e-5) return;
+  var key = [de[0], de[1], para[0], para[1]].map(function(v) { return v.toFixed(5); }).join(',');
+  function usar(pts) { if (pts && pts.length > 1 && tripLayer.hasLayer(grp)) desenhar(pts); }
+  if (walkCache[key]) { usar(walkCache[key]); return; }
+  var url = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot/' + de[1].toFixed(6) + ',' + de[0].toFixed(6) + ';' + para[1].toFixed(6) + ',' + para[0].toFixed(6) + '?overview=full&geometries=geojson';
+  fetch(url).then(function(r) { if (!r.ok) throw new Error('rota ' + r.status); return r.json(); })
+    .then(function(j) {
+      if (!j.routes || !j.routes[0]) return;
+      var pts = j.routes[0].geometry.coordinates.map(function(c) { return [c[1], c[0]]; });
+      pts.unshift([de[0], de[1]]); pts.push([para[0], para[1]]);
+      walkCache[key] = pts; usar(pts);
+    }).catch(function() {});
 }
 
 function legHTML(L1, tipo) {
