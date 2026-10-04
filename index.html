@@ -115,6 +115,18 @@ body { display:flex; flex-direction:column; }
 .tsep { display:flex; align-items:center; gap:8px; padding:0 14px; font-size:.64rem; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; }
 .tsep::before, .tsep::after { content:''; flex:1; height:1px; background:var(--border); }
 .tgroup + .trip, .tsep + .trip { border-bottom:none; }
+.search-bar input { padding-right:36px; }
+.fav-btn { position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); font-size:1.15rem; line-height:1; cursor:pointer; padding:4px 7px; z-index:2; }
+.fav-btn.on { color:var(--yellow); }
+.ac-x { margin-left:auto; padding:0 6px; color:var(--muted); font-size:1rem; line-height:1; }
+.ac-x:hover { color:var(--red); }
+.ac-head { padding:6px 12px 2px; font-size:.6rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--yellow); }
+.rrow { padding:12px 14px; border-bottom:1px solid var(--border); cursor:pointer; display:flex; align-items:center; gap:10px; }
+.rrow:hover { background:var(--surf2); }
+.rr-txt { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
+.rr-line { display:flex; align-items:center; gap:8px; font-size:.8rem; min-width:0; }
+.rr-nome { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.rr-dot { width:18px; height:18px; border-radius:50%; font-size:.6rem; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .tsec.ok { color:var(--green); }
 .tgroup.ponto { box-shadow:inset 3px 0 0 var(--green); }
 .stopcnt { width:22px; height:22px; border-radius:50%; background:#64748B; color:#fff; border:2px solid #fff; font-family:'JetBrains Mono',monospace; font-size:.62rem; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,.6); }
@@ -182,14 +194,17 @@ body { display:flex; flex-direction:column; }
     <div class="field-wrap">
       <div class="field-icon orig">A</div>
       <input id="orig-input" type="text" placeholder="Partindo de... (endereço, bairro, lugar)" autocomplete="off">
+      <button type="button" class="fav-btn" id="orig-fav" aria-label="Favoritar origem">☆</button>
       <div class="ac-drop" id="orig-drop"></div>
     </div>
+    <button class="btn-gps" id="btn-swap" type="button" title="Inverter origem e destino" aria-label="Inverter origem e destino">⇅</button>
     <button class="btn-gps" id="btn-gps">&#9679; GPS</button>
   </div>
   <div class="search-row">
     <div class="field-wrap">
       <div class="field-icon dest">B</div>
       <input id="dest-input" type="text" placeholder="Destino... (endereço, bairro, lugar)" autocomplete="off">
+      <button type="button" class="fav-btn" id="dest-fav" aria-label="Favoritar destino">☆</button>
       <div class="ac-drop" id="dest-drop"></div>
     </div>
     <button class="btn-ir" id="btn-tracar">Traçar</button>
@@ -205,6 +220,7 @@ body { display:flex; flex-direction:column; }
 <div class="tabs" id="tabs">
   <button type="button" class="on" data-tab="dir">Direções</button>
   <button type="button" data-tab="lin">Linhas</button>
+  <button type="button" data-tab="rec">Recorrentes</button>
 </div>
 
 <div class="panel" id="panel">
@@ -290,7 +306,7 @@ function setOrigem(lat, lng, label) {
   if (originMk) map.removeLayer(originMk);
   originMk = L.marker([lat,lng], { icon: mkIcon('<div class="origin-dot"></div>',18,18), zIndexOffset:2000 })
     .addTo(map).bindTooltip('Origem — ' + label, { direction:'top' });
-  render(); updateGmaps();
+  render(); updateGmaps(); atualizarEstrelas();
 }
 function setDestino(lat, lng, label) {
   planActive = false; tripLayer.clearLayers();
@@ -300,7 +316,7 @@ function setDestino(lat, lng, label) {
     .addTo(map).bindTooltip('Destino — ' + label, { direction:'top' });
   if (originLL) map.fitBounds([[originLL.lat,originLL.lng],[lat,lng]], { padding:[60,60] });
   else map.setView([lat,lng], 15);
-  render(); updateGmaps();
+  render(); updateGmaps(); atualizarEstrelas();
 }
 
 function updateGmaps() {
@@ -317,11 +333,14 @@ var acTimers = {}, acActive = { orig:-1, dest:-1 };
 
 function setupAc(name, onSelect) {
   var inp = $(name + '-input'), drop = $(name + '-drop');
+  inp.addEventListener('focus', function() { if (inp.value.trim().length < 3) mostrarSalvos(name, drop, inp, onSelect); });
+  inp.addEventListener('click', function() { if (inp.value.trim().length < 3) mostrarSalvos(name, drop, inp, onSelect); });
   inp.addEventListener('input', function() {
     dirty[name] = true;
+    atualizarEstrelas();
     clearTimeout(acTimers[name]);
     var q = inp.value.trim();
-    if (q.length < 3) { drop.classList.remove('open'); return; }
+    if (q.length < 3) { if (!q) mostrarSalvos(name, drop, inp, onSelect); else drop.classList.remove('open'); return; }
     drop.innerHTML = '<div class="ac-msg">Buscando...</div>';
     drop.classList.add('open');
     acTimers[name] = setTimeout(function() { fetchSuggest(q, drop, inp, name, onSelect); }, 450);
@@ -364,6 +383,7 @@ function fetchSuggest(q, drop, inp, name, onSelect) {
           dirty[name] = false;
           drop.classList.remove('open');
           onSelect(parseFloat(item.lat), parseFloat(item.lon), main);
+          lembrar(name, inp.value, parseFloat(item.lat), parseFloat(item.lon));
         });
         drop.appendChild(div);
       });
@@ -371,6 +391,81 @@ function fetchSuggest(q, drop, inp, name, onSelect) {
     .catch(function() {
       drop.innerHTML = '<div class="ac-msg">Não foi possível buscar sugestões agora.</div>';
     });
+}
+
+// ───────── Favoritos e últimos locais (guardados no aparelho) ─────────
+var LS = { fav: 'onibus.fav', orig: 'onibus.rec.orig', dest: 'onibus.rec.dest' };
+function lsGet(k) { try { var v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function mesmoLocal(a, b) { return Math.abs(a.lat - b.lat) < 0.0003 && Math.abs(a.lng - b.lng) < 0.0003; }
+
+function lembrar(tipo, nome, lat, lng) {
+  nome = String(nome || '').trim();
+  if (!nome) return;
+  var p = { lat: lat, lng: lng };
+  var l = lsGet(LS[tipo]).filter(function(x) { return !mesmoLocal(x, p); });
+  l.unshift({ nome: nome, lat: lat, lng: lng });
+  lsSet(LS[tipo], l.slice(0, 3));
+}
+function ehFavorito(p) { return lsGet(LS.fav).some(function(x) { return mesmoLocal(x, p); }); }
+
+function alternarFavorito(tipo) {
+  var p = tipo === 'orig' ? originLL : destLL, nome = $(tipo + '-input').value.trim();
+  if (!p || dirty[tipo] || !nome || nome.indexOf('Minha localização') === 0 || nome === 'Ponto no mapa') {
+    showToast('Escolha um local da lista (ou digite e toque em Traçar) antes de favoritar.', 'warn', 3500);
+    return;
+  }
+  var f = lsGet(LS.fav), i = -1;
+  f.forEach(function(x, k) { if (mesmoLocal(x, p)) i = k; });
+  if (i >= 0) { f.splice(i, 1); showToast('Removido dos favoritos', 'ok', 1800); }
+  else { f.unshift({ nome: nome, lat: p.lat, lng: p.lng }); showToast('★ Salvo nos favoritos', 'ok', 1800); }
+  lsSet(LS.fav, f.slice(0, 20));
+  atualizarEstrelas();
+}
+function atualizarEstrelas() {
+  ['orig', 'dest'].forEach(function(t) {
+    var p = t === 'orig' ? originLL : destLL, b = $(t + '-fav');
+    var on = !!(p && !dirty[t] && ehFavorito(p));
+    b.textContent = on ? '★' : '☆';
+    b.classList.toggle('on', on);
+  });
+}
+$('orig-fav').addEventListener('click', function() { alternarFavorito('orig'); });
+$('dest-fav').addEventListener('click', function() { alternarFavorito('dest'); });
+
+function mostrarSalvos(tipo, drop, inp, onSelect) {
+  var favs = lsGet(LS.fav), rec = lsGet(LS[tipo]).filter(function(r) { return !favs.some(function(f) { return mesmoLocal(f, r); }); });
+  if (!favs.length && !rec.length) { drop.classList.remove('open'); return; }
+  drop.innerHTML = '';
+  function cabecalho(txt) { var h = document.createElement('div'); h.className = 'ac-head'; h.textContent = txt; drop.appendChild(h); }
+  function item(x, ehFav, idx) {
+    var div = document.createElement('div'); div.className = 'ac-item';
+    var ic = document.createElement('span'); ic.className = 'ac-icon'; ic.textContent = ehFav ? '★' : '🕘';
+    var m = document.createElement('div'); m.className = 'ac-main'; m.textContent = x.nome;
+    div.appendChild(ic); div.appendChild(m);
+    if (ehFav) {
+      var rm = document.createElement('span'); rm.className = 'ac-x'; rm.textContent = '×'; rm.title = 'Remover dos favoritos';
+      rm.addEventListener('mousedown', function(e) { e.preventDefault(); e.stopPropagation(); });
+      rm.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var f = lsGet(LS.fav); f.splice(idx, 1); lsSet(LS.fav, f);
+        atualizarEstrelas();
+        mostrarSalvos(tipo, drop, inp, onSelect);
+      });
+      div.appendChild(rm);
+    }
+    div.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    div.addEventListener('click', function() {
+      inp.value = x.nome; dirty[tipo] = false;
+      drop.classList.remove('open');
+      onSelect(x.lat, x.lng, x.nome);
+      lembrar(tipo, x.nome, x.lat, x.lng);
+    });
+    drop.appendChild(div);
+  }
+  if (favs.length) { cabecalho('Favoritos'); favs.forEach(function(x, i) { item(x, true, i); }); }
+  if (rec.length) { cabecalho(tipo === 'orig' ? 'Últimos embarques' : 'Últimos destinos'); rec.forEach(function(x) { item(x, false); }); }
+  drop.classList.add('open');
 }
 
 function placeIcon(type) {
@@ -413,8 +508,8 @@ function tracarRota() {
   var o = $('orig-input').value.trim(), d = $('dest-input').value.trim(), tasks = [];
   planBusy = true;
   $('btn-tracar').textContent = 'Buscando...';
-  if (o && dirty.orig) tasks.push(geocode(o, function(la, ln, lb) { dirty.orig = false; setOrigem(la, ln, lb); }));
-  if (d && dirty.dest) tasks.push(geocode(d, function(la, ln, lb) { dirty.dest = false; setDestino(la, ln, lb); }));
+  if (o && dirty.orig) tasks.push(geocode(o, function(la, ln, lb) { dirty.orig = false; setOrigem(la, ln, lb); lembrar('orig', o, la, ln); }));
+  if (d && dirty.dest) tasks.push(geocode(d, function(la, ln, lb) { dirty.dest = false; setDestino(la, ln, lb); lembrar('dest', d, la, ln); }));
   Promise.all(tasks)
     .then(function() {
       if (!originLL || !destLL) { showToast('Defina a origem (A) e o destino (B) para ver as viagens.', 'warn', 4000); return; }
@@ -422,8 +517,9 @@ function tracarRota() {
       return Promise.all([carregar(true), ensureLinhas()]).then(function() {
         if (!tripData) return;
         planActive = true;
-        if (tab === 'lin') setTab('dir');
+        if (tab !== 'dir') setTab('dir');
         calcularViagens(true);
+        salvarRota();
         updateGmaps();
         map.fitBounds([[originLL.lat, originLL.lng], [destLL.lat, destLL.lng]], { padding:[60,60] });
       });
@@ -432,6 +528,24 @@ function tracarRota() {
     .then(function() { planBusy = false; $('btn-tracar').textContent = 'Traçar'; });
 }
 $('btn-tracar').addEventListener('click', tracarRota);
+
+// Inverte origem e destino (campos, pontos no mapa e favoritos) e refaz a busca se já havia viagens traçadas.
+function inverter() {
+  var oi = $('orig-input'), di = $('dest-input');
+  var a = originLL, b = destLL, da = dirty.orig, db = dirty.dest, ta = oi.value, tb = di.value;
+  var tinhaPlano = planActive;
+  oi.value = tb; di.value = ta;
+  if (originMk) { map.removeLayer(originMk); originMk = null; }
+  if (destMk) { map.removeLayer(destMk); destMk = null; }
+  originLL = null; destLL = null;
+  if (b) setOrigem(b.lat, b.lng, tb);
+  if (a) setDestino(a.lat, a.lng, ta);
+  dirty.orig = db; dirty.dest = da;
+  atualizarEstrelas();
+  if (tinhaPlano && originLL && destLL) tracarRota();
+  else { render(); updateGmaps(); }
+}
+$('btn-swap').addEventListener('click', inverter);
 
 // ───────── Viagens (traçados oficiais GTFS + ônibus ao vivo) ─────────
 function ensureLinhas() {
@@ -599,12 +713,69 @@ function setTab(nome) {
   linhaSelKey = null;
   $('panel').classList.remove('min');
   if (nome === 'lin') ensureLinhas().then(renderLinhas);
+  else if (nome === 'rec') renderRecorrentes();
   else if (planActive) renderTrips();
   else render();
 }
 document.querySelectorAll('#tabs button').forEach(function(b) {
   b.addEventListener('click', function() { setTab(b.getAttribute('data-tab')); });
 });
+
+// ───────── Aba Recorrentes (últimas 3 rotas A → B) ─────────
+LS.rotas = 'onibus.rotas';
+
+function salvarRota() {
+  var a = $('orig-input').value.trim(), b = $('dest-input').value.trim();
+  if (!originLL || !destLL || !a || !b) return;
+  if (a.indexOf('Minha localização') === 0 || a === 'Ponto no mapa') return;
+  var r = { a: { nome: a, lat: originLL.lat, lng: originLL.lng }, b: { nome: b, lat: destLL.lat, lng: destLL.lng } };
+  var l = lsGet(LS.rotas).filter(function(x) { return !(mesmoLocal(x.a, r.a) && mesmoLocal(x.b, r.b)); });
+  l.unshift(r);
+  lsSet(LS.rotas, l.slice(0, 3));
+}
+
+function usarRota(r) {
+  $('orig-input').value = r.a.nome; dirty.orig = false; setOrigem(r.a.lat, r.a.lng, r.a.nome);
+  $('dest-input').value = r.b.nome; dirty.dest = false; setDestino(r.b.lat, r.b.lng, r.b.nome);
+  setTab('dir');
+  tracarRota();
+}
+
+function renderRecorrentes() {
+  var list = $('bus-list'), rotas = lsGet(LS.rotas);
+  $('chips').hidden = true;
+  busLayer.clearLayers(); tripLayer.clearLayers();
+  $('panel-title').textContent = 'Rotas recorrentes';
+  $('counter').textContent = rotas.length + (rotas.length === 1 ? ' rota' : ' rotas');
+  $('panel-sum').textContent = ''; $('panel').classList.remove('has-sum');
+  list.innerHTML = '';
+  if (!rotas.length) {
+    list.innerHTML = '<div class="empty">As últimas 3 rotas que você traçar aparecem aqui. Toque numa delas para buscar de novo.</div>';
+    return;
+  }
+  var note = document.createElement('div'); note.className = 'tnote';
+  note.textContent = 'Últimas rotas traçadas. Toque para buscar de novo com os ônibus de agora.';
+  list.appendChild(note);
+  rotas.forEach(function(r, i) {
+    var div = document.createElement('div'); div.className = 'rrow';
+    var txt = document.createElement('div'); txt.className = 'rr-txt';
+    [['A', r.a.nome, '#38BDF8', '#000'], ['B', r.b.nome, '#F87171', '#fff']].forEach(function(x) {
+      var ln = document.createElement('div'); ln.className = 'rr-line';
+      var dot = document.createElement('span'); dot.className = 'rr-dot'; dot.textContent = x[0]; dot.style.background = x[2]; dot.style.color = x[3];
+      var nm = document.createElement('span'); nm.className = 'rr-nome'; nm.textContent = x[1];
+      ln.appendChild(dot); ln.appendChild(nm); txt.appendChild(ln);
+    });
+    var rm = document.createElement('span'); rm.className = 'ac-x'; rm.textContent = '×'; rm.title = 'Remover esta rota';
+    rm.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var l = lsGet(LS.rotas); l.splice(i, 1); lsSet(LS.rotas, l);
+      renderRecorrentes();
+    });
+    div.appendChild(txt); div.appendChild(rm);
+    div.addEventListener('click', function() { usarRota(r); });
+    list.appendChild(div);
+  });
+}
 
 function refLinhas() {
   if (linhasRef === 'B' && destLL) return destLL;
@@ -769,6 +940,7 @@ function referencia() { return originLL || destLL; }
 
 function render() {
   if (tab === 'lin') { renderLinhas(); return; }
+  if (tab === 'rec') { renderRecorrentes(); return; }
   if (planActive) { renderTrips(); return; }
   tripLayer.clearLayers();
   updatePanelSum();
@@ -868,7 +1040,7 @@ function carregar(forcar) {
       dataUpdated = j.updated;
       if (apiErrorState) { apiErrorState = false; showToast('✅ Dados atualizados', 'ok', 2500); }
       showFreshness();
-      if (tab === 'lin') renderLinhas(); else if (planActive) calcularViagens(); else render();
+      if (tab === 'lin') renderLinhas(); else if (tab === 'rec') renderRecorrentes(); else if (planActive) calcularViagens(); else render();
     })
     .catch(function(e) {
       var msg;
