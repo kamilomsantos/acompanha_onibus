@@ -161,7 +161,7 @@
       var key = sh.r + '|' + sh.d;
       if (best[key] && best[key].total <= total) return;
       best[key] = {
-        svc: sh.r, sid: sid, dir: sh.d, head: sh.h,
+        svc: sh.r, sid: sid, dir: sh.d, head: sh.h, modal: sh.m || '',
         stopA: data.stops[sa.i][0], walkAm: Math.round(sa.d), stopAll: sa,
         stopB: data.stops[sb.i][0], walkBm: Math.round(sb.d), stopBll: sb,
         waits: waits.slice(0, 3).map(function (x) { return Math.max(1, Math.round(x.w)); }),
@@ -223,7 +223,7 @@
       waits.sort(function (x, y) { return x.w - y.w; });
       var st0 = data.stops[sp.i];
       return {
-        svc: sh.r, sid: sh.sid, dir: sh.d, head: sh.h, stop: st0[0], stopLL: [st0[1], st0[2]],
+        svc: sh.r, sid: sh.sid, dir: sh.d, head: sh.h, modal: sh.m || '', stop: st0[0], stopLL: [st0[1], st0[2]],
         dist: Math.round(sp.d), stopAll: sp, emCirculacao: !!lv, longe: !!longe,
         waits: waits.slice(0, 3).map(function (x) { return Math.max(1, Math.round(x.w)); }),
         buses: waits.slice(0, 3)
@@ -276,6 +276,24 @@
     return { updated: max.replace('T', ' ').replace('Z', '').slice(0, 19), buses: buses };
   }
 
-  var api = { consolidar: consolidar, linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
+  // Resposta do BRT ({ veiculos: [...] }) -> linhas no mesmo formato do gps.json, com o 8º item 'B' (modal BRT).
+  // Descarta posições antigas (muitos veículos do BRT ficam parados sem GPS) e linhas de serviço sem sentido.
+  var fmtRio = typeof Intl !== 'undefined' ? new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit' }) : null;
+  function consolidarBRT(json, agoraMs, maxIdadeMin) {
+    var lim = (maxIdadeMin || 15) * 60000, agora = agoraMs || Date.now(), out = [];
+    ((json && json.veiculos) || []).forEach(function (v) {
+      var t = Number(v.dataHora);
+      if (!t || agora - t > lim || t - agora > 120000) return;
+      if (v.latitude == null || v.longitude == null || !v.codigo || v.linha == null) return;
+      var sentido = v.sentido === 'ida' ? 'I' : (v.sentido === 'volta' ? 'V' : '');
+      out.push([String(v.linha), 'BRT' + v.codigo, Math.round(v.latitude * 1e5) / 1e5, Math.round(v.longitude * 1e5) / 1e5,
+        Math.round(v.velocidade || 0), sentido, fmtRio.format(new Date(t)).replace(' ', 'T') + 'Z', 'B']);
+    });
+    return out;
+  }
+
+  var api = { consolidarBRT: consolidarBRT, consolidar: consolidar, linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Planner = api;
 })(typeof window !== 'undefined' ? window : this);

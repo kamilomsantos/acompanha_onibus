@@ -28,7 +28,9 @@ function csv(nome) {
 const r5 = v => Math.round(parseFloat(v) * 1e5) / 1e5;
 
 (async () => {
-  const routes = new Map(csv('routes.txt').map(r => [r.route_id, r.route_short_name]));
+  const rotasCsv = csv('routes.txt');
+  const routes = new Map(rotasCsv.map(r => [r.route_id, r.route_short_name]));
+  const tipoRota = new Map(rotasCsv.map(r => [r.route_id, r.route_type]));   // 702 = BRT
   const trips = csv('trips.txt');
   const stops = new Map(csv('stops.txt').map(s => [s.stop_id, s]));
 
@@ -96,6 +98,7 @@ const r5 = v => Math.round(parseFloat(v) * 1e5) / 1e5;
     pp.forEach(x => flat.push(x[1], x[2]));
     const simp = P.simplify(flat, 12).map(v => Math.round(v * 1e5) / 1e5);
     const sh = { r: rota, d: +t.direction_id || 0, h: t.trip_headsign || '', p: simp, s: [] };
+    if (tipoRota.get(t.route_id) === '702') sh.m = 'B';   // modal BRT
     P.prep(sh);
     let from = 0;
     const lista = (paradasTrip.get(t.trip_id) || []).sort((a, b) => a[0] - b[0]);
