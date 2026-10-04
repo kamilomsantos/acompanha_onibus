@@ -108,6 +108,13 @@ body { display:flex; flex-direction:column; }
 .tabs { display:flex; background:var(--surf); border-top:1px solid var(--border); flex-shrink:0; z-index:5; }
 .tabs button { flex:1; background:none; border:none; border-bottom:3px solid transparent; color:var(--muted); font-family:'Inter',sans-serif; font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:10px 0 8px; cursor:pointer; }
 .tabs button.on { color:var(--yellow); border-bottom-color:var(--yellow); }
+.tsec { padding:8px 14px 4px; font-size:.62rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--yellow); }
+.tgroup { padding:8px 14px 6px; display:flex; justify-content:space-between; gap:8px; align-items:baseline; background:var(--surf2); border-top:1px solid var(--border); }
+.tstop { font-size:.78rem; font-weight:700; min-width:0; }
+.twalk { font-size:.66rem; color:var(--muted); white-space:nowrap; }
+.tsep { display:flex; align-items:center; gap:8px; padding:0 14px; font-size:.64rem; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; }
+.tsep::before, .tsep::after { content:''; flex:1; height:1px; background:var(--border); }
+.tgroup + .trip, .tsep + .trip { border-bottom:none; }
 .refpick { display:inline-flex; gap:4px; margin-left:6px; vertical-align:middle; }
 .refpick button { background:var(--surf2); border:1px solid var(--border); color:var(--fg); border-radius:6px; font-size:.64rem; font-weight:700; padding:1px 8px; cursor:pointer; }
 .refpick button.on { background:var(--yellow); color:#000; border-color:var(--yellow); }
@@ -433,14 +440,26 @@ function ensureLinhas() {
 
 function hhmm(d) { return d.toLocaleTimeString('pt-BR', { timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit' }); }
 
+var RAIO_EMBARQUE_M = 200, nPerto = 0;
 var tripSelKey = null;
 function tripKey(t) { return t.svc + '|' + t.dir; }
 
 // novo = true: cálculo iniciado pelo usuário (Traçar ou mudança do filtro); false: atualização automática
 function calcularViagens(novo) {
   if (!tripData || !originLL || !destLL) return;
-  tripPlan = Planner.plan(tripData, buses, originLL, destLL, Date.now());
-  if (filterLines.length) tripPlan = tripPlan.filter(function(t) { return filterLines.indexOf(normLine(t.svc)) >= 0; });
+  var agora = Date.now();
+  // 1) linhas com parada a até 200 m de A; 2) demais opções com caminhada maior
+  var perto = Planner.plan(tripData, buses, originLL, destLL, agora, { maxWalkA: RAIO_EMBARQUE_M, maxWalkB: 800 });
+  var vistas = {};
+  perto.forEach(function(t) { vistas[tripKey(t)] = true; });
+  var longe = Planner.plan(tripData, buses, originLL, destLL, agora, { maxWalkA: 800, maxWalkB: 800 })
+    .filter(function(t) { return !vistas[tripKey(t)] && t.walkAm > RAIO_EMBARQUE_M; });
+  nPerto = perto.length;
+  tripPlan = perto.concat(longe);
+  if (filterLines.length) {
+    tripPlan = tripPlan.filter(function(t) { return filterLines.indexOf(normLine(t.svc)) >= 0; });
+    nPerto = tripPlan.filter(function(t) { return t.walkAm <= RAIO_EMBARQUE_M; }).length;
+  }
   if (novo) tripSelKey = (filterLines.length && tripPlan.length) ? tripKey(tripPlan[0]) : null;
   tripSel = -1;
   if (tripSelKey) tripPlan.forEach(function(t, i) { if (tripKey(t) === tripSelKey) tripSel = i; });
@@ -478,22 +497,55 @@ function renderTrips() {
     updatePanelSum();
     return;
   }
-  tripPlan.slice(0, 10).forEach(function(t, i) {
-    var div = document.createElement('div'); div.className = 'trip' + (i === tripSel ? ' sel' : '');
-    div.innerHTML = '<div class="trip-top"><span class="tline">' + esc(t.svc) + '</span><span class="thead">→ ' + esc(t.head) + '</span>'
-      + '<span class="ttot"><b>' + t.total + ' min</b> · chega às ' + hhmm(t.arrive) + '</span></div>'
-      + '<div class="tsub">Ônibus chega ao ponto em <b>' + t.waits.join(', ') + ' min</b> · ' + esc(t.stopA) + ' <span>(' + t.walkAm + ' m a pé)</span></div>'
-      + '<div class="tsub">Desça em ' + esc(t.stopB) + ' <span>(' + t.walkBm + ' m até B)</span> · viagem ~' + t.ride + ' min</div>';
-    div.addEventListener('click', function() {
-      tripSel = i; tripSelKey = tripKey(t);
-      if (celular()) $('panel').classList.add('min');
-      renderTrips();
-      setTimeout(function() { map.invalidateSize(); selectTrip(i, true); }, 90);
-    });
-    list.appendChild(div);
-  });
+  renderTripGroups(list);
   if (tripSel >= 0) selectTrip(tripSel, false); else tripLayer.clearLayers();
   updatePanelSum();
+}
+
+function tripCard(t, i) {
+  var div = document.createElement('div'); div.className = 'trip' + (i === tripSel ? ' sel' : '');
+  div.innerHTML = '<div class="trip-top"><span class="tline">' + esc(t.svc) + '</span><span class="thead">→ ' + esc(t.head) + '</span>'
+    + '<span class="ttot"><b>' + t.total + ' min</b> · chega às ' + hhmm(t.arrive) + '</span></div>'
+    + '<div class="tsub">Ônibus chega ao ponto em <b>' + t.waits.join(', ') + ' min</b></div>'
+    + '<div class="tsub">Desça em ' + esc(t.stopB) + ' <span>(' + t.walkBm + ' m até B)</span> · viagem ~' + t.ride + ' min</div>';
+  div.addEventListener('click', function() {
+    tripSel = i; tripSelKey = tripKey(t);
+    if (celular()) $('panel').classList.add('min');
+    renderTrips();
+    setTimeout(function() { map.invalidateSize(); selectTrip(i, true); }, 90);
+  });
+  return div;
+}
+
+// Agrupa por parada de embarque (na ordem da melhor opção) e separa as linhas da mesma parada com "ou".
+function renderTripGroups(list) {
+  function secao(titulo, ini, fim, maxGrupos) {
+    var grupos = [], porParada = {};
+    for (var i = ini; i < fim; i++) {
+      var t = tripPlan[i];
+      if (!porParada[t.stopA]) { porParada[t.stopA] = { stop: t.stopA, walk: t.walkAm, itens: [] }; grupos.push(porParada[t.stopA]); }
+      porParada[t.stopA].itens.push({ t: t, i: i });
+    }
+    if (!grupos.length) return;
+    var h = document.createElement('div'); h.className = 'tsec'; h.textContent = titulo; list.appendChild(h);
+    grupos.slice(0, maxGrupos).forEach(function(g) {
+      var cab = document.createElement('div'); cab.className = 'tgroup';
+      cab.innerHTML = '<span class="tstop">🚏 ' + esc(g.stop) + '</span><span class="twalk">' + g.walk + ' m a pé · '
+        + g.itens.length + (g.itens.length === 1 ? ' linha' : ' linhas') + '</span>';
+      list.appendChild(cab);
+      g.itens.forEach(function(it, k) {
+        if (k > 0) { var ou = document.createElement('div'); ou.className = 'tsep'; ou.textContent = 'ou'; list.appendChild(ou); }
+        list.appendChild(tripCard(it.t, it.i));
+      });
+    });
+  }
+  if (nPerto > 0) secao('Embarque a até ' + RAIO_EMBARQUE_M + ' m de A', 0, nPerto, 6);
+  else {
+    var aviso = document.createElement('div'); aviso.className = 'tnote'; aviso.style.color = 'var(--yellow)';
+    aviso.textContent = 'Nenhuma linha com parada a até ' + RAIO_EMBARQUE_M + ' m de A leva até B agora. Estas são opções com caminhada maior.';
+    list.appendChild(aviso);
+  }
+  secao(nPerto > 0 ? 'Mais opções (paradas mais distantes)' : 'Opções com paradas mais distantes', nPerto, tripPlan.length, 4);
 }
 
 function selectTrip(i, fit) {

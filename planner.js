@@ -116,7 +116,7 @@
   // Viagens diretas A -> B. Estimativa: velocidade média fixa, sem baldeação.
   function plan(data, buses, A, B, now, opt) {
     opt = opt || {};
-    var maxWalk = opt.maxWalk || 800, vMpm = (opt.vKmh || 15) * 1000 / 60, walkMpm = opt.walkMpm || 80;
+    var maxWalk = opt.maxWalk || 800, maxWalkA = opt.maxWalkA || maxWalk, maxWalkB = opt.maxWalkB || maxWalk, vMpm = (opt.vKmh || 15) * 1000 / 60, walkMpm = opt.walkMpm || 80;
     var minRide = opt.minRide || 400, maxWait = opt.maxWait || 60;
     var live = {};
     buses.forEach(function (b) { (live[b.s] = live[b.s] || []).push(b); });
@@ -133,14 +133,14 @@
       var sa = null;
       sh.s.forEach(function (st) {
         var s = data.stops[st[0]], d = hav(A.lat, A.lng, s[1], s[2]);
-        if (d <= maxWalk && (!sa || d < sa.d)) sa = { d: d, i: st[0], along: st[1] };
+        if (d <= maxWalkA && (!sa || d < sa.d)) sa = { d: d, i: st[0], along: st[1] };
       });
       if (!sa) return;
       var sb = null;
       sh.s.forEach(function (st) {
         if (st[1] < sa.along + minRide) return;
         var s = data.stops[st[0]], d = hav(B.lat, B.lng, s[1], s[2]);
-        if (d <= maxWalk && (!sb || d < sb.d)) sb = { d: d, i: st[0], along: st[1] };
+        if (d <= maxWalkB && (!sb || d < sb.d)) sb = { d: d, i: st[0], along: st[1] };
       });
       if (!sb) return;
 
