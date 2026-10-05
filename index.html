@@ -1062,6 +1062,10 @@ function selectBald(i, fit) {
   if (!b) return;
   var shX = tripData.shapes[b.x.sid], shY = tripData.shapes[b.y.sid];
   var p1 = Planner.slice(shX, b.x.stopAll.along, b.x.stopTll.along), p2 = Planner.slice(shY, b.y.stopTll.along, b.y.stopBll.along);
+  [[p1, b.x.stopAll.i, b.x.stopTll.i], [p2, b.y.stopTll.i, b.y.stopBll.i]].forEach(function(e) {
+    var de = tripData.stops[e[1]], ate = tripData.stops[e[2]];
+    e[0].unshift([de[1], de[2]]); e[0].push([ate[1], ate[2]]);
+  });
   if (p1.length > 1) tripLayer.addLayer(L.polyline(p1, { color:'#38BDF8', weight:5, opacity:.85 }));
   if (p2.length > 1) tripLayer.addLayer(L.polyline(p2, { color:'#A78BFA', weight:5, opacity:.9 }));
   function pt(id, cor, txt) { var s = tripData.stops[id]; tripLayer.addLayer(L.marker([s[1], s[2]], { icon: mkIcon('<div class="stopmk" style="background:' + cor + '"></div>', 14, 14) }).bindTooltip(txt + ': ' + s[0])); }
@@ -1078,6 +1082,8 @@ function selectTrip(i, fit) {
   if (!t) return;
   var sh = tripData.shapes[t.sid];
   var pts = Planner.slice(sh, t.stopAll.along, t.stopBll.along);
+  var sa0 = tripData.stops[t.stopAll.i], sb0 = tripData.stops[t.stopBll.i];
+  pts.unshift([sa0[1], sa0[2]]); pts.push([sb0[1], sb0[2]]);   // fecha o vão entre o traçado e a parada, para o ônibus e a caminhada se encontrarem
   if (pts.length > 1) tripLayer.addLayer(L.polyline(pts, { color:'#38BDF8', weight:5, opacity:.85 }));
   var sa = tripData.stops[t.stopAll.i], sb = tripData.stops[t.stopBll.i];
   tripLayer.addLayer(L.marker([sa[1], sa[2]], { icon: mkIcon('<div class="stopmk" style="background:#22C55E"></div>', 14, 14) }).bindTooltip('Embarque: ' + sa[0]));

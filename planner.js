@@ -269,10 +269,27 @@
   }
 
   // Pontos do traçado entre duas posições (m) para desenhar no mapa.
+  // Ponto do traçado a d metros do início (interpola dentro do trecho: o traçado é simplificado e tem trechos retos longos)
+  function pointAt(sh, d) {
+    prep(sh);
+    var cum = sh.cum, q = sh.p, n = sh.n;
+    if (d <= 0) return [q[0], q[1]];
+    if (d >= cum[n - 1]) return [q[2 * n - 2], q[2 * n - 1]];
+    for (var i = 1; i < n; i++) {
+      if (cum[i] >= d) {
+        var t = (d - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1);
+        return [q[2 * i - 2] + (q[2 * i] - q[2 * i - 2]) * t, q[2 * i - 1] + (q[2 * i + 1] - q[2 * i - 1]) * t];
+      }
+    }
+    return [q[2 * n - 2], q[2 * n - 1]];
+  }
+
+  // Trecho do traçado entre duas posições (m), começando e terminando EXATAMENTE nelas.
   function slice(sh, from, to) {
     prep(sh);
-    var out = [];
-    for (var i = 0; i < sh.n; i++) if (sh.cum[i] >= from && sh.cum[i] <= to) out.push([sh.p[2 * i], sh.p[2 * i + 1]]);
+    var out = [pointAt(sh, from)];
+    for (var i = 0; i < sh.n; i++) if (sh.cum[i] > from && sh.cum[i] < to) out.push([sh.p[2 * i], sh.p[2 * i + 1]]);
+    out.push(pointAt(sh, to));
     return out;
   }
 
