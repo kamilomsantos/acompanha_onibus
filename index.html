@@ -366,10 +366,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js?v=20261005-2"></script>
+<script src="planner.js?v=20261005-3"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261005-2';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261005-3';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -904,22 +904,34 @@ function calcularViagens(novo) {
   baldPlan = [];
   if (!filterLines.length) {
     try {
-      var melhorDireta = tripPlan.length ? tripPlan[0].total : 1e9;
+      var melhorDireta = 1e9;
+      tripPlan.forEach(function(t) { if (t.total < melhorDireta) melhorDireta = t.total; });
       baldPlan = Planner.planBaldeacao(tripData, buses, originLL, destLL, agora, {})
         .filter(function(b) { return b.total < melhorDireta - 10; });
     } catch (e) { baldPlan = []; }
   }
-  baldSel = -1;
+  // 'Traçar' (novo) escolhe de novo; nas atualizações automáticas mantém a escolha do usuário
+  if (novo) { tripSelKey = null; baldSelKey = null; $('panel').classList.remove('min'); }
+  baldSel = -1; tripSel = -1;
   if (baldSelKey) baldPlan.forEach(function(b, i) { if (b.key === baldSelKey) baldSel = i; });
+  if (baldSel < 0 && tripSelKey) tripPlan.forEach(function(t, i) { if (tripKey(t) === tripSelKey) tripSel = i; });
   if (baldSel >= 0) tripSelKey = null;
-  if (novo) tripSelKey = (filterLines.length && tripPlan.length) ? tripKey(tripPlan[0]) : null;
-  tripSel = -1;
-  if (tripSelKey) tripPlan.forEach(function(t, i) { if (tripKey(t) === tripSelKey) tripSel = i; });
+  // nada escolhido: a viagem de MENOR TEMPO (direta ou com baldeação) já vem selecionada; as outras ficam na lista para trocar
+  var autoSel = false;
+  if (tripSel < 0 && baldSel < 0) {
+    var melhor = null;
+    tripPlan.forEach(function(t, i) { if (!melhor || t.total < melhor.total) melhor = { total: t.total, i: i, tipo: 'd' }; });
+    baldPlan.forEach(function(b, i) { if (!melhor || b.total < melhor.total) melhor = { total: b.total, i: i, tipo: 'b' }; });
+    if (melhor) {
+      autoSel = true;
+      if (melhor.tipo === 'd') { tripSel = melhor.i; tripSelKey = tripKey(tripPlan[tripSel]); baldSelKey = null; }
+      else { baldSel = melhor.i; baldSelKey = baldPlan[baldSel].key; tripSelKey = null; }
+    }
+  }
   renderTrips();
-  if (novo && tripSel < 0) baldSelKey = null;
-  if (novo && tripSel >= 0) {
-    if (celular()) $('panel').classList.add('min');
-    setTimeout(function() { map.invalidateSize(); selectTrip(tripSel, true); }, 90);
+  if (novo) {
+    // a lista fica aberta (no celular também) para o usuário poder escolher outra linha
+    setTimeout(function() { map.invalidateSize(); if (tripSel >= 0) selectTrip(tripSel, true); else if (baldSel >= 0) selectBald(baldSel, true); }, 90);
   }
 }
 
