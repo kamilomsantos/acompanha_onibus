@@ -303,7 +303,7 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
   <div class="dot wait" id="sdot"></div>
   <button type="button" class="btn-tema" id="btn-tema" aria-label="Escolher tema" aria-haspopup="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
 </div>
-<div class="menu-tema" id="menu-tema" hidden><button type="button" data-tema="auto">🌗 Automático (do aparelho)<span class="ck">✓</span></button><button type="button" data-tema="light">☀️ Claro<span class="ck">✓</span></button><button type="button" data-tema="dark">🌙 Escuro<span class="ck">✓</span></button></div>
+<div class="menu-tema" id="menu-tema" hidden><button type="button" data-tema="auto">🌗 Automático (do aparelho)<span class="ck">✓</span></button><button type="button" data-tema="light">☀️ Claro<span class="ck">✓</span></button><button type="button" data-tema="dark">🌙 Escuro<span class="ck">✓</span></button><div style="padding:6px 12px 4px;font-size:.66rem;color:var(--muted)">Versão <span id="app-versao"></span></div></div>
 
 <div class="tabs" id="tabs">
   <button type="button" class="on" data-tab="dir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8z"/></svg>Direções</button>
@@ -366,9 +366,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js"></script>
+<script src="planner.js?v=20261005-2"></script>
 <script>
 // ───────── Config ─────────
+var APP_V = '20261005-2';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -607,7 +608,7 @@ function buscarBase(q) {
 var paradasPromise = null;
 function paradasCarregadas() {
   if (tripData) return Promise.resolve(tripData);
-  if (!paradasPromise) paradasPromise = fetch('linhas.json')
+  if (!paradasPromise) paradasPromise = fetch('linhas.json?v='+APP_V)
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(j) { if (!tripData) tripData = j; return tripData; })
     .catch(function() { paradasPromise = null; return null; });
@@ -871,7 +872,7 @@ $('btn-swap').addEventListener('click', inverter);
 function ensureLinhas() {
   if (tripData) return Promise.resolve();
   showToast('Carregando traçados das linhas...', 'warn', 3000);
-  return fetch('linhas.json')
+  return fetch('linhas.json?v='+APP_V)
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(j) { tripData = j; $('toast').classList.remove('show'); })
     .catch(function() { showToast('Não foi possível carregar os traçados das linhas.', 'error', 6000); });
@@ -1543,6 +1544,7 @@ window.addEventListener('online', carregar);
   });
   if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() { aplicar(ler()); });
   aplicar(ler());
+  var v = document.getElementById('app-versao'); if (v) v.textContent = APP_V;
 })();
 </script>
 </body>
