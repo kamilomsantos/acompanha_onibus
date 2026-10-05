@@ -366,10 +366,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js?v=20261005-4"></script>
+<script src="planner.js?v=20261005-5"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261005-4';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261005-5';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -628,17 +628,28 @@ function semAcento(t) { return String(t).normalize('NFD').replace(/[̀-ͯ]/g, ''
 function paradasLocais(q) {
   var toks = semAcento(q).split(/[^a-z0-9]+/).filter(function(t) { return t.length >= 2; })
     .map(function(t) { return t.length > 3 ? t.replace(/s$/, '') : t; });
-  if (!toks.length || toks.some(function(t) { return /^\d+$/.test(t); })) return Promise.resolve([]);
+  var soBrt = toks.indexOf('brt') >= 0;   // "brt madureira": só estações do BRT (a palavra BRT não precisa estar no nome da parada)
+  toks = toks.filter(function(t) { return t !== 'brt'; });
+  if ((!toks.length && !soBrt) || toks.some(function(t) { return /^\d+$/.test(t); })) return Promise.resolve([]);
   return paradasCarregadas().then(function(d) {
     if (!d) return [];
+    if (!d.brtParadas) {   // paradas usadas por linhas do BRT (modal 'B' no linhas.json)
+      d.brtParadas = {};
+      Object.keys(d.shapes).forEach(function(id) { var sh = d.shapes[id]; if (sh.m === 'B') sh.s.forEach(function(st) { d.brtParadas[st[0]] = true; }); });
+    }
     var vistos = {}, out = [];
-    d.stops.forEach(function(st) {
+    d.stops.forEach(function(st, idx) {
+      var ehBrt = !!d.brtParadas[idx];
+      if (soBrt && !ehBrt) return;
       var limpo = st[0].replace(/\s*::.*$/, '').replace(/^Ponto Final:\s*/i, ''), n = semAcento(limpo);
       if (!toks.every(function(t) { return n.indexOf(t) >= 0; })) return;
-      if (vistos[n]) return; vistos[n] = true;
-      out.push({ lat: st[1], lon: st[2], class: 'bus_stop', type: 'bus_stop', address: { suburb: '', city: '' }, nome: limpo, rua: 'Parada / estação de ônibus', display_name: limpo });
+      var chave = n + (ehBrt ? '|brt' : '');
+      if (vistos[chave]) return; vistos[chave] = true;
+      out.push({ lat: st[1], lon: st[2], class: 'bus_stop', type: ehBrt ? 'brt_station' : 'bus_stop', brt: ehBrt, address: { suburb: '', city: '' }, nome: limpo,
+        rua: ehBrt ? 'Estação BRT' : 'Parada / estação de ônibus', display_name: limpo });
     });
-    return out.sort(function(a, b) { return a.nome.length - b.nome.length; }).slice(0, 3);
+    // estações do BRT primeiro (quando a busca não pede só BRT, ainda aparecem antes das paradas comuns)
+    return out.sort(function(a, b) { return (b.brt ? 1 : 0) - (a.brt ? 1 : 0) || a.nome.length - b.nome.length; }).slice(0, soBrt ? 5 : 3);
   }).catch(function() { return []; });
 }
 function buscarLugares(q) {
@@ -784,7 +795,7 @@ function mostrarSalvos(tipo, drop, inp, onSelect) {
 }
 
 function placeIcon(type) {
-  var icons = { bus:'🚌', subway:'🚇', station:'🚆', train:'🚆', hospital:'🏥', school:'🏫', university:'🎓', park:'🌳', beach:'🏖️', stadium:'🏟️',
+  var icons = { brt:'🚍', bus:'🚌', subway:'🚇', station:'🚆', train:'🚆', hospital:'🏥', school:'🏫', university:'🎓', park:'🌳', beach:'🏖️', stadium:'🏟️',
     mall:'🛍️', supermarket:'🛒', restaurant:'🍽️', cafe:'☕', hotel:'🏨', fuel:'⛽', museum:'🏛️', church:'⛪', bank:'🏦' };
   var t = String(type || '').toLowerCase();
   for (var k in icons) if (t.indexOf(k) >= 0) return icons[k];
