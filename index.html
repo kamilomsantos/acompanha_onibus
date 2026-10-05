@@ -366,10 +366,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js?v=20261005-5"></script>
+<script src="planner.js?v=20261005-6"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261005-5';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261005-6';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -904,6 +904,10 @@ function hhmm(d) { return d.toLocaleTimeString('pt-BR', { timeZone:'America/Sao_
 var RAIO_EMBARQUE_M = 200, nPerto = 0;
 var tripSelKey = null, baldPlan = [], baldSel = -1, baldSelKey = null;
 function tripKey(t) { return t.svc + '|' + t.dir; }
+// Faixas de caminhada até o embarque, em sequência: 200, 500, 1000 e 2000 m
+var FAIXAS_M = [200, 500, 1000, 2000];
+function faixaCaminhada(t) { for (var i = 0; i < FAIXAS_M.length; i++) if (t.walkAm <= FAIXAS_M[i]) return FAIXAS_M[i]; return 2000; }
+function nomeFaixa(m) { return 'Embarque a até ' + (m >= 1000 ? (m / 1000) + ' km' : m + ' m') + ' da localização'; }
 
 // novo = true: cálculo iniciado pelo usuário (Traçar ou mudança do filtro); false: atualização automática
 function calcularViagens(novo) {
@@ -915,8 +919,14 @@ function calcularViagens(novo) {
   perto.forEach(function(t) { vistas[tripKey(t)] = true; });
   var longe = Planner.plan(tripData, buses, originLL, destLL, agora, { maxWalkA: 800, maxWalkB: 800 })
     .filter(function(t) { return !vistas[tripKey(t)] && t.walkAm > RAIO_EMBARQUE_M; });
+  // BRT: as pessoas caminham mais até a estação — aceita até 2000 m (apresentado nas faixas de 500, 1000 e 2000 m)
+  var jaVistas = {};
+  perto.concat(longe).forEach(function(t) { jaVistas[tripKey(t)] = true; });
+  var brtLongo = Planner.plan(tripData, buses, originLL, destLL, agora, { maxWalkA: 2000, maxWalkB: 2000, soBrt: true })
+    .filter(function(t) { return !jaVistas[tripKey(t)]; });
+  var resto = longe.concat(brtLongo).sort(function(a, b) { return faixaCaminhada(a) - faixaCaminhada(b) || a.total - b.total; });
   nPerto = perto.length;
-  tripPlan = perto.concat(longe);
+  tripPlan = perto.concat(resto);
   if (filterLines.length) {
     tripPlan = tripPlan.filter(function(t) { return filterLines.indexOf(normLine(t.svc)) >= 0; });
     nPerto = tripPlan.filter(function(t) { return t.walkAm <= RAIO_EMBARQUE_M; }).length;
@@ -927,10 +937,14 @@ function calcularViagens(novo) {
     try {
       var melhorDireta = 1e9;
       tripPlan.forEach(function(t) { if (t.total < melhorDireta) melhorDireta = t.total; });
-      baldPlan = Planner.planBaldeacao(tripData, buses, originLL, destLL, agora, {});
-      // sem opção com o raio padrão (500/700 m): tenta de novo aceitando caminhar até 800 m
-      if (!baldPlan.length) baldPlan = Planner.planBaldeacao(tripData, buses, originLL, destLL, agora, { maxWalkA: 800, maxWalkB: 800 });
-      baldPlan = baldPlan.filter(function(b) { return b.total < melhorDireta - 10; });
+      // raio padrão (500/700 m; BRT até 2000 m) + raio de 800 m para todas as linhas: junta, tira repetidas e ordena pelo tempo
+      var unicas = {};
+      Planner.planBaldeacao(tripData, buses, originLL, destLL, agora, {})
+        .concat(Planner.planBaldeacao(tripData, buses, originLL, destLL, agora, { maxWalkA: 800, maxWalkB: 800 }))
+        .forEach(function(b) { if (!unicas[b.key] || b.total < unicas[b.key].total) unicas[b.key] = b; });
+      baldPlan = Object.keys(unicas).map(function(k) { return unicas[k]; })
+        .sort(function(a, b) { return a.total - b.total; }).slice(0, 8)
+        .filter(function(b) { return b.total < melhorDireta - 10; });
     } catch (e) { baldPlan = []; }
   }
   // 'Traçar' (novo) escolhe de novo; nas atualizações automáticas mantém a escolha do usuário
@@ -1034,7 +1048,14 @@ function renderTripGroups(list) {
     aviso.textContent = 'Nenhuma linha com parada a até ' + RAIO_EMBARQUE_M + ' m da localização leva até B agora. Estas são opções com caminhada maior.';
     list.appendChild(aviso);
   }
-  secao(nPerto > 0 ? 'Mais opções (paradas mais distantes)' : 'Opções com paradas mais distantes', nPerto, tripPlan.length, 4);
+  // demais opções em sequência: até 500 m, até 1 km, até 2 km (BRT)
+  var ini = nPerto;
+  while (ini < tripPlan.length) {
+    var fx = faixaCaminhada(tripPlan[ini]), fim = ini;
+    while (fim < tripPlan.length && faixaCaminhada(tripPlan[fim]) === fx) fim++;
+    secao(nomeFaixa(fx), ini, fim, 4);
+    ini = fim;
+  }
 }
 
 // Trecho a pé: pontilhado preto (com contorno branco). Desenha já em linha reta e troca pelo caminho pelas ruas

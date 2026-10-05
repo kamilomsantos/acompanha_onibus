@@ -126,6 +126,7 @@
     Object.keys(data.shapes).forEach(function (sid) {
       var sh = data.shapes[sid], lv = live[sh.r];
       if (!lv) return;
+      if (opt.soBrt && sh.m !== 'B') return;   // soBrt: só linhas do BRT (usado para caminhadas maiores até a estação)
       prep(sh);
       var sa = null;
       sh.s.forEach(function (st) {
@@ -204,10 +205,13 @@
       if (!lv) return;
       prep(sh);
       var sa = null, sb = null;
+      // BRT: as pessoas aceitam caminhar mais até a estação (padrão 2000 m)
+      var limA = sh.m === 'B' ? Math.max(maxWalkA, opt.walkBrt || 2000) : maxWalkA;
+      var limB = sh.m === 'B' ? Math.max(maxWalkB, opt.walkBrt || 2000) : maxWalkB;
       sh.s.forEach(function (st) {
         var s = data.stops[st[0]], da = hav(A.lat, A.lng, s[1], s[2]), db = hav(B.lat, B.lng, s[1], s[2]);
-        if (da <= maxWalkA && (!sa || da < sa.d)) sa = { d: da, i: st[0], along: st[1] };
-        if (db <= maxWalkB && (!sb || db < sb.d)) sb = { d: db, i: st[0], along: st[1] };
+        if (da <= limA && (!sa || da < sa.d)) sa = { d: da, i: st[0], along: st[1] };
+        if (db <= limB && (!sb || db < sb.d)) sb = { d: db, i: st[0], along: st[1] };
       });
       if (sa) {
         var ws = eta(sh, lv, sa.along).filter(function (x) { return x.w >= sa.d / walkMpm * 0.9 && x.w <= maxWait; });
