@@ -370,6 +370,8 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <script>
 // ───────── Config ─────────
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
+// Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
+var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
 var NOM_URL  = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=br&addressdetails=1&viewbox=-43.8,-22.7,-43.0,-23.1&q=';
 var WORKER_URL = 'https://acompanha-onibus.kamilo-santos.workers.dev/';   // Worker do Cloudflare; se falhar, usa o gps.json
 var REFRESH  = 60000;
@@ -564,11 +566,47 @@ function portaOficial(rua, num, ref) {
     .then(function(r) { cachePorta[chave] = r; return r; });
 }
 
+// Resultado do Photon no mesmo formato que o resto do app já usa (o do Nominatim)
+function photonParaItem(f) {
+  var p = f.properties || {}, c = f.geometry && f.geometry.coordinates;
+  if (!c || c.length < 2) return null;
+  var rua = p.osm_key === 'highway';
+  var nome = rua ? '' : (p.name || (p.street ? p.street + (p.housenumber ? ', ' + p.housenumber : '') : ''));
+  var ad = { suburb: p.district || p.suburb || p.locality || '', city: p.city || 'Rio de Janeiro' };
+  if (rua) ad.road = p.name || p.street || '';
+  if (p.housenumber) ad.house_number = p.housenumber;
+  return { lat: c[1], lon: c[0], class: p.osm_key || '', type: p.osm_value || '', address: ad, nome: nome, rua: rua ? '' : (p.street || ''),
+    display_name: [nome || ad.road, ad.suburb, ad.city].filter(Boolean).join(', ') };
+}
+function buscarPhoton(q) {
+  return fetch(PHOTON_URL + encodeURIComponent(q))
+    .then(function(r) { if (!r.ok) throw new Error('photon ' + r.status); return r.json(); })
+    .then(function(j) {
+      var vistos = {};
+      return (j.features || []).map(photonParaItem).filter(function(it) {
+        if (!it) return false;
+        var k = (it.nome || it.address.road) + '|' + it.rua + '|' + it.address.suburb;
+        if (vistos[k]) return false; vistos[k] = true; return true;
+      });
+    });
+}
+function buscarNominatim(q) {
+  return fetch(NOM_URL + encodeURIComponent(q + ', Rio de Janeiro')).then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+}
+function buscarLugares(q) {
+  var num = extrairNumero(q);
+  return buscarPhoton(q).then(function(d) {
+    var temRua = d.some(function(it) { return it.class === 'highway'; });
+    if (d.length && !(num && !temRua)) return d;
+    // sem resultado, ou endereço com número mas sem a rua: completa com o Nominatim (a rua é o que liga à base de portas da Prefeitura)
+    return buscarNominatim(q).then(function(n) { return d.concat(n); }, function() { return d; });
+  }, function() { return buscarNominatim(q); });
+}
+
 function fetchSuggest(q, drop, inp, name, onSelect) {
   acActive[name] = -1;
   var num = extrairNumero(q);
-  fetch(NOM_URL + encodeURIComponent(q + ', Rio de Janeiro'))
-    .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+  buscarLugares(q)
     .then(function(data) {
       var rua = null;
       if (num) data.forEach(function(it) { if (!rua && it.class === 'highway' && it.address && it.address.road) rua = it; });
@@ -597,8 +635,8 @@ function montarSugestoes(drop, inp, name, onSelect, data, num, rua, of) {
   data.forEach(function(item) {
     var ad = item.address || {};
     if (of && rua && item.class === 'highway' && ad.road === rua.address.road) return;
-    var main = ad.road || ad.amenity || ad.shop || ad.suburb || ad.neighbourhood || item.display_name.split(',')[0];
-    var sub = [ad.suburb || ad.neighbourhood, ad.city_district, ad.city || 'Rio de Janeiro'].filter(Boolean).join(', ');
+    var main = item.nome || ad.road || ad.amenity || ad.shop || ad.suburb || ad.neighbourhood || item.display_name.split(',')[0];
+    var sub = [item.rua, ad.suburb || ad.neighbourhood, ad.city_district, ad.city || 'Rio de Janeiro'].filter(Boolean).join(', ');
     var aprox = numeroAproximado(item, num);
     if (item.class === 'highway' && num) main = main + ', ' + num;
     if (aprox) sub += ' · nº ' + num + ' aproximado (só a rua está no mapa)';
@@ -732,8 +770,7 @@ $('btn-gps').addEventListener('click', function() {
 });
 
 function geocode(text, cb) {
-  return fetch(NOM_URL + encodeURIComponent(text + ', Rio de Janeiro'))
-    .then(function(r) { return r.json(); })
+  return buscarLugares(text)
     .then(function(d) {
       if (!d.length) { showToast('Local não encontrado: ' + text, 'warn', 4000); return; }
       var it = d[0], num = extrairNumero(text), lat = parseFloat(it.lat), lng = parseFloat(it.lon);
