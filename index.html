@@ -464,7 +464,7 @@ var acTimers = {}, acActive = { orig:-1, dest:-1 };
 
 function setupAc(name, onSelect) {
   var inp = $(name + '-input'), drop = $(name + '-drop');
-  inp.addEventListener('focus', function() { if (inp.value.trim().length < 3) mostrarSalvos(name, drop, inp, onSelect); });
+  inp.addEventListener('focus', function() { paradasCarregadas(); if (inp.value.trim().length < 3) mostrarSalvos(name, drop, inp, onSelect); });
   inp.addEventListener('click', function() { if (inp.value.trim().length < 3) mostrarSalvos(name, drop, inp, onSelect); });
   inp.addEventListener('input', function() {
     dirty[name] = true;
@@ -593,7 +593,7 @@ function buscarPhoton(q) {
 function buscarNominatim(q) {
   return fetch(NOM_URL + encodeURIComponent(q + ', Rio de Janeiro')).then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); });
 }
-function buscarLugares(q) {
+function buscarBase(q) {
   var num = extrairNumero(q);
   return buscarPhoton(q).then(function(d) {
     var temRua = d.some(function(it) { return it.class === 'highway'; });
@@ -601,6 +601,39 @@ function buscarLugares(q) {
     // sem resultado, ou endereço com número mas sem a rua: completa com o Nominatim (a rua é o que liga à base de portas da Prefeitura)
     return buscarNominatim(q).then(function(n) { return d.concat(n); }, function() { return d; });
   }, function() { return buscarNominatim(q); });
+}
+
+// Paradas e estações das linhas (GTFS, já no linhas.json): sempre aparecem na busca, mesmo quando o OpenStreetMap não tem o local
+var paradasPromise = null;
+function paradasCarregadas() {
+  if (tripData) return Promise.resolve(tripData);
+  if (!paradasPromise) paradasPromise = fetch('linhas.json')
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(j) { if (!tripData) tripData = j; return tripData; })
+    .catch(function() { paradasPromise = null; return null; });
+  return paradasPromise;
+}
+function semAcento(t) { return String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function paradasLocais(q) {
+  var toks = semAcento(q).split(/[^a-z0-9]+/).filter(function(t) { return t.length >= 2; })
+    .map(function(t) { return t.length > 3 ? t.replace(/s$/, '') : t; });
+  if (!toks.length || toks.some(function(t) { return /^\d+$/.test(t); })) return Promise.resolve([]);
+  return paradasCarregadas().then(function(d) {
+    if (!d) return [];
+    var vistos = {}, out = [];
+    d.stops.forEach(function(st) {
+      var limpo = st[0].replace(/\s*::.*$/, '').replace(/^Ponto Final:\s*/i, ''), n = semAcento(limpo);
+      if (!toks.every(function(t) { return n.indexOf(t) >= 0; })) return;
+      if (vistos[n]) return; vistos[n] = true;
+      out.push({ lat: st[1], lon: st[2], class: 'bus_stop', type: 'bus_stop', address: { suburb: '', city: '' }, nome: limpo, rua: 'Parada / estação de ônibus', display_name: limpo });
+    });
+    return out.sort(function(a, b) { return a.nome.length - b.nome.length; }).slice(0, 3);
+  }).catch(function() { return []; });
+}
+function buscarLugares(q) {
+  return Promise.all([buscarBase(q).catch(function() { return []; }), paradasLocais(q)]).then(function(r) {
+    return r[0].slice(0, 3).concat(r[1], r[0].slice(3));
+  });
 }
 
 function fetchSuggest(q, drop, inp, name, onSelect) {
