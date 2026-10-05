@@ -366,10 +366,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js?v=20261005-3"></script>
+<script src="planner.js?v=20261005-4"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261005-3';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261005-4';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -594,7 +594,17 @@ function buscarPhoton(q) {
 function buscarNominatim(q) {
   return fetch(NOM_URL + encodeURIComponent(q + ', Rio de Janeiro')).then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); });
 }
+// "02 corporate" (zero-dois) costuma ser "O2 corporate" (letra O): busca as duas grafias e junta, a variante com O primeiro
 function buscarBase(q) {
+  var v = q.replace(/\b0(\d)\b/g, 'O$1');
+  if (v === q) return buscarBase1(q);
+  return Promise.all([buscarBase1(v).catch(function() { return []; }), buscarBase1(q).catch(function() { return []; })]).then(function(r) {
+    var vistos = {}, out = [];
+    r[0].concat(r[1]).forEach(function(it) { var k = (+it.lat).toFixed(4) + ',' + (+it.lon).toFixed(4); if (!vistos[k]) { vistos[k] = true; out.push(it); } });
+    return out;
+  });
+}
+function buscarBase1(q) {
   var num = extrairNumero(q);
   return buscarPhoton(q).then(function(d) {
     var temRua = d.some(function(it) { return it.class === 'highway'; });
@@ -906,8 +916,10 @@ function calcularViagens(novo) {
     try {
       var melhorDireta = 1e9;
       tripPlan.forEach(function(t) { if (t.total < melhorDireta) melhorDireta = t.total; });
-      baldPlan = Planner.planBaldeacao(tripData, buses, originLL, destLL, agora, {})
-        .filter(function(b) { return b.total < melhorDireta - 10; });
+      baldPlan = Planner.planBaldeacao(tripData, buses, originLL, destLL, agora, {});
+      // sem opção com o raio padrão (500/700 m): tenta de novo aceitando caminhar até 800 m
+      if (!baldPlan.length) baldPlan = Planner.planBaldeacao(tripData, buses, originLL, destLL, agora, { maxWalkA: 800, maxWalkB: 800 });
+      baldPlan = baldPlan.filter(function(b) { return b.total < melhorDireta - 10; });
     } catch (e) { baldPlan = []; }
   }
   // 'Traçar' (novo) escolhe de novo; nas atualizações automáticas mantém a escolha do usuário
