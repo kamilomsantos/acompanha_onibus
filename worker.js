@@ -16,7 +16,7 @@ const MIN_BYTES   = { sppo: 1000, brt: 2000 };   // abaixo disso a resposta é c
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': '*',
   'Access-Control-Expose-Headers': 'X-Cache, X-Idade, X-Fonte',
 };
@@ -112,13 +112,65 @@ async function servir(nome, ctx, env) {
   }
 }
 
+// ─── Rastreamento em tempo real (KV: SESSOES) ──────────────────────────────
+// Para ativar: crie um KV namespace "SESSOES" no painel do Cloudflare,
+// adicione ao wrangler.toml:
+//   [[kv_namespaces]]
+//   binding = "SESSOES"
+//   id = "<id do namespace>"
+// Sem o KV os endpoints retornam 503 e o app desativa a aba com aviso.
+
+const SESS_CHARS = 'BCDFGHJKMNPQRSTVWXYZ23456789';
+function codRand() {
+  return Array.from({length:5}, () => SESS_CHARS[Math.floor(Math.random() * SESS_CHARS.length)]).join('');
+}
+
+async function sessaoCriar(env) {
+  if (!env.SESSOES) return new Response(JSON.stringify({error:'kv_nao_configurado'}),
+    {status:503, headers:{...CORS,'Content-Type':'application/json'}});
+  const codigo = codRand();
+  await env.SESSOES.put(`sess:${codigo}:_`, '1', {expirationTtl:7200});
+  return new Response(JSON.stringify({codigo}), {headers:{...CORS,'Content-Type':'application/json'}});
+}
+
+async function sessaoPost(codigo, pid, env, req) {
+  if (!env.SESSOES) return new Response(JSON.stringify({error:'kv_nao_configurado'}),
+    {status:503, headers:{...CORS,'Content-Type':'application/json'}});
+  let b; try { b = await req.json(); } catch(e) { return new Response('JSON inválido', {status:400, headers:CORS}); }
+  if (!b.lat || !b.lng) return new Response('lat/lng obrigatórios', {status:400, headers:CORS});
+  await env.SESSOES.put(`sess:${codigo}:${pid}`,
+    JSON.stringify({lat:b.lat, lng:b.lng, ts:Date.now(), nome:b.nome||''}),
+    {expirationTtl:7200});
+  return new Response('ok', {headers:CORS});
+}
+
+async function sessaoGet(codigo, env) {
+  if (!env.SESSOES) return new Response(JSON.stringify({error:'kv_nao_configurado'}),
+    {status:503, headers:{...CORS,'Content-Type':'application/json'}});
+  const lista = await env.SESSOES.list({prefix:`sess:${codigo}:`});
+  const ps = await Promise.all(lista.keys.map(async k => {
+    const pid = k.name.slice(`sess:${codigo}:`.length);
+    if (pid === '_') return null;
+    const v = await env.SESSOES.get(k.name);
+    return v ? {pid, ...JSON.parse(v)} : null;
+  }));
+  return new Response(JSON.stringify(ps.filter(Boolean)),
+    {headers:{...CORS,'Content-Type':'application/json'}});
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     const caminho = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
     if (caminho === '/' || caminho === '/sppo') return servir('sppo', ctx, env);
     if (caminho === '/brt') return servir('brt', ctx, env);
-    return new Response(JSON.stringify({ error: 'rota desconhecida', rotas: ['/', '/sppo', '/brt'] }), {
+    // ── sessão ──
+    if (caminho === '/sessao/criar' && request.method === 'POST') return sessaoCriar(env);
+    const mPos = caminho.match(/^\/sessao\/([A-Z0-9]{4,6})\/([^/]+)$/);
+    if (mPos && request.method === 'POST') return sessaoPost(mPos[1], mPos[2], env, request);
+    const mGet = caminho.match(/^\/sessao\/([A-Z0-9]{4,6})$/);
+    if (mGet && request.method === 'GET') return sessaoGet(mGet[1], env);
+    return new Response(JSON.stringify({ error: 'rota desconhecida', rotas: ['/', '/sppo', '/brt', '/sessao/criar', '/sessao/:codigo'] }), {
       status: 404,
       headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8' },
     });

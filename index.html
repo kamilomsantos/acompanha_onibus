@@ -288,6 +288,22 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 .tabs button.on { background:var(--ydim); color:var(--accent); }
 .topbar { order:1; } .tabs { order:2; } .search-bar { order:3; } #map { order:4; } .panel { order:5; }
 @media (min-width:800px) { .topbar, .tabs, .search-bar, #map, .panel { order:0; } .tabs { border:none; border-radius:0; } }
+/* ─── Aba Encontro ─── */
+.enc-card { margin:14px 10px; }
+.enc-desc { font-size:.8rem; color:var(--muted); line-height:1.55; margin-bottom:16px; }
+.enc-full { width:100%; justify-content:center; }
+.enc-sep { display:flex; align-items:center; gap:8px; margin:14px 0; font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.enc-sep::before, .enc-sep::after { content:''; flex:1; height:1px; background:var(--border); }
+.enc-join { display:flex; gap:8px; }
+.enc-join input { flex:1; background:var(--surf2); border:1.5px solid var(--border); color:var(--fg); border-radius:14px; padding:11px 16px; font-size:1.2rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; outline:none; }
+.enc-join input:focus { border-color:var(--accent); }
+.enc-status-row { display:flex; align-items:center; gap:8px; font-size:.85rem; margin-bottom:12px; }
+.enc-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; animation:pulse 1.5s infinite; background:var(--green); }
+.enc-code-box { font-family:'JetBrains Mono',monospace; font-size:2.6rem; font-weight:800; letter-spacing:.14em; color:var(--accent); text-align:center; padding:18px; background:var(--surf2); border-radius:18px; margin:8px 0 4px; }
+.enc-code-hint { font-size:.66rem; color:var(--muted); text-align:center; margin-bottom:8px; }
+.enc-btns { display:flex; gap:8px; margin-top:4px; }
+.enc-status { font-size:.74rem; color:var(--muted); margin-top:14px; text-align:center; line-height:1.45; }
+.enc-status.ok { color:var(--green); }
 /* ─── Estimativa de saída ─── */
 .hist-note { margin:0 10px 8px; border-radius:14px; background:var(--ydim); padding:10px 14px; font-size:.74rem; color:var(--fg); display:flex; align-items:center; gap:10px; }
 .hist-note .hist-icon { font-size:1.1rem; flex-shrink:0; }
@@ -317,6 +333,7 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
   <button type="button" class="on" data-tab="dir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8z"/></svg>Direções</button>
   <button type="button" data-tab="lin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="3"/><path d="M4 11h16M8 21v-2M16 21v-2"/><circle cx="8" cy="14" r=".5"/><circle cx="16" cy="14" r=".5"/></svg>Linhas</button>
   <button type="button" data-tab="rec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>Recorrentes</button>
+  <button type="button" data-tab="enc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><circle cx="15" cy="7" r="3"/><path d="M3 21v-1a6 6 0 0 1 6-6h6a6 6 0 0 1 6 6v1"/></svg>Encontro</button>
 </div>
 
 <div class="search-bar" id="search-bar">
@@ -374,10 +391,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js?v=20261006-3"></script>
+<script src="planner.js?v=20261006-4"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261006-3';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261006-4';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -395,6 +412,7 @@ var dirty = { orig: false, dest: false };
 var buses = [], prevPos = {}, dataUpdated = null, apiErrorState = false;
 var filterLines = [];
 var tripData = null, tripPlan = [], planActive = false, tripSel = -1, tripLayer = null, planBusy = false;
+var encontroLayer = null, sessaoCodigo = null, sessaoPid = null, sessaoAtiva = false, _pollH = null, _shareH = null;
 
 // ───────── Utilidades ─────────
 function $(id) { return document.getElementById(id); }
@@ -431,6 +449,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 busLayer = L.layerGroup().addTo(map);
 tripLayer = L.layerGroup().addTo(map);
+encontroLayer = L.layerGroup().addTo(map);
 map.on('click', function(e) {
   setOrigem(e.latlng.lat, e.latlng.lng, 'ponto no mapa');
   $('orig-input').value = 'Ponto no mapa'; dirty.orig = false;
@@ -1214,6 +1233,7 @@ function setTab(nome) {
   $('panel').classList.remove('min');
   if (nome === 'lin') ensureLinhas().then(function() { if (!locAtual) pedirLocalizacao(); else { mostrarLocMk(); renderLinhas(); } });
   else if (nome === 'rec') renderRecorrentes();
+  else if (nome === 'enc') renderEncontro();
   else if (planActive) renderTrips();
   else render();
 }
@@ -1610,6 +1630,115 @@ function carregar(forcar) {
 carregar();
 setInterval(carregar, REFRESH);
 window.addEventListener('online', carregar);
+
+// ───────── Aba Encontro — rastreamento por código ─────────
+function meuPid() {
+  var KEY = 'ae.pid';
+  try {
+    var p = localStorage.getItem(KEY);
+    if (!p) { p = Math.random().toString(36).slice(2,10).toUpperCase(); localStorage.setItem(KEY, p); }
+    return p;
+  } catch(e) { return 'PILOTO'; }
+}
+
+function renderEncontro() {
+  var list = $('bus-list');
+  list.innerHTML = '';
+  $('panel-title').textContent = 'Encontro em tempo real';
+  $('counter').textContent = '';
+  $('chips').hidden = true;
+
+  var div = document.createElement('div'); div.className = 'enc-card';
+  if (!sessaoAtiva) {
+    div.innerHTML = '<p class="enc-desc">Compartilhe sua posição com alguém para se encontrarem no transporte. Zero cadastro — só um código temporário.</p>'
+      + '<button class="btn-ir enc-full" id="enc-comecar">📍 Começar trajeto</button>'
+      + '<div class="enc-sep">ou entrar com código</div>'
+      + '<div class="enc-join"><input id="enc-inp" placeholder="Ex: BK7MT" maxlength="5" autocomplete="off"><button class="btn-ir" id="enc-entrar">Entrar</button></div>';
+    list.appendChild(div);
+    $('enc-comecar').onclick = iniciarSessao;
+    var fnEntrar = function() { entrarSessao($('enc-inp').value.trim().toUpperCase()); };
+    $('enc-entrar').onclick = fnEntrar;
+    $('enc-inp').addEventListener('keydown', function(e) { if (e.key === 'Enter') fnEntrar(); });
+  } else {
+    div.innerHTML = '<div class="enc-status-row"><span class="enc-dot"></span><b>Rastreamento ativo</b></div>'
+      + '<div class="enc-code-box">' + sessaoCodigo + '</div>'
+      + '<div class="enc-code-hint">Compartilhe este código com quem vai se encontrar com você</div>'
+      + '<div class="enc-btns"><button class="btn-gps" id="enc-copiar">📋 Copiar</button><button class="btn-gps" id="enc-encerrar">✕ Encerrar</button></div>'
+      + '<div class="enc-status" id="enc-st">Aguardando participantes…</div>';
+    list.appendChild(div);
+    $('enc-copiar').onclick = function() {
+      if (navigator.clipboard) navigator.clipboard.writeText(sessaoCodigo).then(function() { showToast('Código copiado!', 'ok', 1500); }).catch(function(){});
+      else showToast(sessaoCodigo, 'ok', 4000);
+    };
+    $('enc-encerrar').onclick = encerrarSessao;
+  }
+  updatePanelSum();
+}
+
+function iniciarSessao() {
+  fetch(WORKER_URL + 'sessao/criar', {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error === 'kv_nao_configurado') { showToast('Função ainda não ativada (KV pendente)', 'warn', 5000); return; }
+      if (!d.codigo) { showToast('Erro ao criar sessão', 'error', 3000); return; }
+      sessaoCodigo = d.codigo; sessaoPid = meuPid(); sessaoAtiva = true;
+      encontroLayer.clearLayers(); renderEncontro(); iniciarShare(); iniciarPoll();
+    }).catch(function() { showToast('Sem conexão com o servidor', 'error', 4000); });
+}
+
+function entrarSessao(cod) {
+  if (!cod || cod.length < 4) { showToast('Digite o código (4–5 caracteres)', 'warn', 3000); return; }
+  sessaoCodigo = cod; sessaoPid = meuPid(); sessaoAtiva = true;
+  encontroLayer.clearLayers(); renderEncontro(); iniciarShare(); iniciarPoll();
+}
+
+function encerrarSessao() {
+  clearInterval(_pollH); clearInterval(_shareH);
+  sessaoAtiva = false; sessaoCodigo = null;
+  encontroLayer.clearLayers(); renderEncontro();
+}
+
+function iniciarShare() {
+  clearInterval(_shareH);
+  function enviar() {
+    if (!sessaoAtiva || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      fetch(WORKER_URL + 'sessao/' + sessaoCodigo + '/' + sessaoPid, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({lat: pos.coords.latitude, lng: pos.coords.longitude, nome: 'Eu'})
+      }).catch(function(){});
+    }, function(){}, {enableHighAccuracy:false, timeout:10000, maximumAge:20000});
+  }
+  enviar(); _shareH = setInterval(enviar, 30000);
+}
+
+function iniciarPoll() {
+  clearInterval(_pollH);
+  function buscar() {
+    if (!sessaoAtiva) return;
+    fetch(WORKER_URL + 'sessao/' + sessaoCodigo)
+      .then(function(r) { return r.json(); })
+      .then(function(ps) {
+        if (!Array.isArray(ps)) return;
+        encontroLayer.clearLayers();
+        var meu = sessaoPid, outros = ps.filter(function(p) { return p.pid !== meu; });
+        outros.forEach(function(p) {
+          var lbl = '<div class="bmarker" style="background:var(--amber);color:#000">👤 ' + esc(p.nome || '?') + '</div>';
+          encontroLayer.addLayer(L.marker([p.lat, p.lng], {
+            icon: mkIcon(lbl, 80, 24), zIndexOffset: 1000
+          }).bindTooltip((p.nome || 'Participante') + ' · ' + Math.round((Date.now() - p.ts) / 1000) + 's atrás'));
+        });
+        var st = $('enc-st');
+        if (st) {
+          st.textContent = outros.length
+            ? outros.length + ' participante' + (outros.length > 1 ? 's' : '') + ' no mapa'
+            : 'Aguardando participantes…';
+          st.className = 'enc-status' + (outros.length ? ' ok' : '');
+        }
+      }).catch(function(){});
+  }
+  buscar(); _pollH = setInterval(buscar, 15000);
+}
 
 // ───────── Histórico de saídas (estimativa de saída — fase 1: coleta local) ─────────
 var histSaida = (function() {
