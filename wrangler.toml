@@ -1,3 +1,12 @@
 name = "acompanha-onibus"
 main = "worker.js"
 compatibility_date = "2025-01-01"
+
+# KV para rastreamento em tempo real (aba Encontro)
+# Para ativar:
+#   1. Painel Cloudflare → Workers & Pages → KV → Create namespace → nome: SESSOES
+#   2. Copie o ID gerado (32 chars hex) e cole abaixo, descomentando as 3 linhas
+#   3. git push → Workers Builds faz o deploy com o binding ativo
+# [[kv_namespaces]]
+# binding = "SESSOES"
+# id = "COLE_O_ID_DO_KV_AQUI"

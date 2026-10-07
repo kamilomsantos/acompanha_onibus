@@ -391,10 +391,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js?v=20261006-4"></script>
+<script src="planner.js?v=20261006-5"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261006-4';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261006-5';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -413,6 +413,8 @@ var buses = [], prevPos = {}, dataUpdated = null, apiErrorState = false;
 var filterLines = [];
 var tripData = null, tripPlan = [], planActive = false, tripSel = -1, tripLayer = null, planBusy = false;
 var encontroLayer = null, sessaoCodigo = null, sessaoPid = null, sessaoAtiva = false, _pollH = null, _shareH = null;
+var _minhaPos = null, _proximoSince = null, _expiryH = null;
+var PROX_M = 500, EXPIRY_MS = 15 * 60 * 1000;
 
 // ───────── Utilidades ─────────
 function $(id) { return document.getElementById(id); }
@@ -1692,10 +1694,17 @@ function entrarSessao(cod) {
   encontroLayer.clearLayers(); renderEncontro(); iniciarShare(); iniciarPoll();
 }
 
-function encerrarSessao() {
-  clearInterval(_pollH); clearInterval(_shareH);
-  sessaoAtiva = false; sessaoCodigo = null;
+function encerrarSessao(motivo) {
+  clearInterval(_pollH); clearInterval(_shareH); clearTimeout(_expiryH);
+  sessaoAtiva = false; sessaoCodigo = null; _proximoSince = null; _minhaPos = null;
   encontroLayer.clearLayers(); renderEncontro();
+  if (motivo) showToast(motivo, 'ok', 4000);
+}
+
+function distM2(a, b) {
+  var R = 6371000, dLat = (b.lat - a.lat) * Math.PI / 180, dLon = (b.lng - a.lng) * Math.PI / 180;
+  var s = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
 }
 
 function iniciarShare() {
@@ -1703,9 +1712,10 @@ function iniciarShare() {
   function enviar() {
     if (!sessaoAtiva || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(function(pos) {
+      _minhaPos = {lat: pos.coords.latitude, lng: pos.coords.longitude};
       fetch(WORKER_URL + 'sessao/' + sessaoCodigo + '/' + sessaoPid, {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({lat: pos.coords.latitude, lng: pos.coords.longitude, nome: 'Eu'})
+        body: JSON.stringify({lat: _minhaPos.lat, lng: _minhaPos.lng, nome: 'Eu'})
       }).catch(function(){});
     }, function(){}, {enableHighAccuracy:false, timeout:10000, maximumAge:20000});
   }
@@ -1722,18 +1732,46 @@ function iniciarPoll() {
         if (!Array.isArray(ps)) return;
         encontroLayer.clearLayers();
         var meu = sessaoPid, outros = ps.filter(function(p) { return p.pid !== meu; });
+
+        // Marcadores dos participantes no mapa
         outros.forEach(function(p) {
           var lbl = '<div class="bmarker" style="background:var(--amber);color:#000">👤 ' + esc(p.nome || '?') + '</div>';
           encontroLayer.addLayer(L.marker([p.lat, p.lng], {
             icon: mkIcon(lbl, 80, 24), zIndexOffset: 1000
           }).bindTooltip((p.nome || 'Participante') + ' · ' + Math.round((Date.now() - p.ts) / 1000) + 's atrás'));
         });
+
+        // Detecção de proximidade → expiração automática
+        var perto = outros.length && _minhaPos && outros.some(function(p) {
+          return distM2(_minhaPos, {lat: p.lat, lng: p.lng}) <= PROX_M;
+        });
+
+        if (perto) {
+          if (!_proximoSince) {
+            _proximoSince = Date.now();
+            _expiryH = setTimeout(function() {
+              encerrarSessao('🤝 Vocês se encontraram! Sessão encerrada.');
+            }, EXPIRY_MS);
+          }
+        } else {
+          if (_proximoSince) { _proximoSince = null; clearTimeout(_expiryH); _expiryH = null; }
+        }
+
+        // Atualiza status na tela
         var st = $('enc-st');
         if (st) {
-          st.textContent = outros.length
-            ? outros.length + ' participante' + (outros.length > 1 ? 's' : '') + ' no mapa'
-            : 'Aguardando participantes…';
-          st.className = 'enc-status' + (outros.length ? ' ok' : '');
+          var txt, cls = 'enc-status';
+          if (perto && _proximoSince) {
+            var restante = Math.max(0, Math.round((EXPIRY_MS - (Date.now() - _proximoSince)) / 60000));
+            txt = '🤝 Próximos! Sessão expira em ' + restante + ' min';
+            cls += ' ok';
+          } else if (outros.length) {
+            txt = outros.length + ' participante' + (outros.length > 1 ? 's' : '') + ' no mapa';
+            cls += ' ok';
+          } else {
+            txt = 'Aguardando participantes…';
+          }
+          st.textContent = txt; st.className = cls;
         }
       }).catch(function(){});
   }
