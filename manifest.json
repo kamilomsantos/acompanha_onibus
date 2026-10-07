@@ -1,0 +1,17 @@
+{
+  "name": "Aê, Piloto",
+  "short_name": "Aê, Piloto",
+  "description": "Assistente de transporte inteligente para o Rio de Janeiro",
+  "start_url": "/acompanha_onibus/",
+  "scope": "/acompanha_onibus/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1c1c1e",
+  "background_color": "#1c1c1e",
+  "lang": "pt-BR",
+  "categories": ["navigation", "travel"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
