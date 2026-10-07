@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Ônibus Rio ao Vivo</title>
+<title>Aê, Piloto</title>
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
@@ -296,7 +296,7 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="topbar">
   <div class="logo">RIO</div>
   <div class="topbar-info">
-    <div class="topbar-title" id="title-txt">Ônibus ao vivo</div>
+    <div class="topbar-title" id="title-txt">Aê, Piloto</div>
     <div class="topbar-sub" id="sub-txt">Carregando dados...</div>
   </div>
   <span id="counter">--</span>
@@ -366,10 +366,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js?v=20261005-6"></script>
+<script src="planner.js?v=20261006-1"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261005-6';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261006-1';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -1521,7 +1521,7 @@ function showFreshness() {
   var t = rioMs(dataUpdated), min = isNaN(t) ? null : Math.round((Date.now() - t) / 60000);
   var hora = String(dataUpdated).slice(11, 16);
   var cls = min === null ? 'wait' : (min <= 12 ? 'live' : (min <= 30 ? 'wait' : 'err'));
-  setStatus(cls, 'Ônibus ao vivo', 'Dados de ' + hora + (min !== null ? ' (há ' + min + ' min)' : '') + ' · SMTR/Rio');
+  setStatus(cls, 'Aê, Piloto', 'Dados de ' + hora + (min !== null ? ' (há ' + min + ' min)' : '') + ' · SMTR/Rio');
 }
 
 // 1ª opção: Worker do Cloudflare (repassa a SMTR com CORS e cache de 30 s; o celular consolida). Reserva: gps.json do GitHub Actions.
