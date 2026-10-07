@@ -180,8 +180,8 @@ body { display:flex; flex-direction:column; }
 .tline.brt { background:#2f81f7; color:#fff; }
 .bmarker.brt { background:#2f81f7; color:#fff; }
 .bmarker.nearest-bus { background:var(--green); border-color:#fff; }
-.origin-dot { width:18px; height:18px; border-radius:50%; background:var(--blue); border:3px solid #fff; box-shadow:0 0 0 5px rgba(56,189,248,.3), 0 2px 8px rgba(0,0,0,.4); }
-.dest-dot { width:22px; height:22px; border-radius:50%; background:var(--red); border:3px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700; color:#fff; }
+.origin-dot { width:18px; height:18px; border-radius:50%; background:#A855F7; border:3px solid #fff; box-shadow:0 0 0 5px rgba(168,85,247,.3), 0 2px 8px rgba(0,0,0,.4); }
+.dest-dot { width:22px; height:22px; border-radius:50%; background:#DC2626; border:3px solid #fff; box-shadow:0 0 0 4px rgba(220,38,38,.25), 0 2px 8px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700; color:#fff; }
 
 /* ───────── Visual novo: tokens (escuro é o padrão; claro por escolha ou pelo aparelho) ───────── */
 :root {
@@ -400,7 +400,7 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <script src="planner.js?v=20261006-6"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261007-2';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261007-3';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
