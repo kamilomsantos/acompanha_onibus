@@ -374,10 +374,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js?v=20261006-2"></script>
+<script src="planner.js?v=20261006-3"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261006-2';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261006-3';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -1152,8 +1152,8 @@ function selectBald(i, fit) {
     var de = tripData.stops[e[1]], ate = tripData.stops[e[2]];
     e[0].unshift([de[1], de[2]]); e[0].push([ate[1], ate[2]]);
   });
-  if (p1.length > 1) tripLayer.addLayer(L.polyline(p1, { color:'#38BDF8', weight:5, opacity:.85 }));
-  if (p2.length > 1) tripLayer.addLayer(L.polyline(p2, { color:'#A78BFA', weight:5, opacity:.9 }));
+  if (p1.length > 1) { tripLayer.addLayer(L.polyline(p1, { color:'#fff', weight:9, opacity:.5, lineCap:'round' })); tripLayer.addLayer(L.polyline(p1, { color:'#A855F7', weight:6, opacity:.95, lineCap:'round' })); }
+  if (p2.length > 1) { tripLayer.addLayer(L.polyline(p2, { color:'#fff', weight:9, opacity:.5, lineCap:'round' })); tripLayer.addLayer(L.polyline(p2, { color:'#C084FC', weight:6, opacity:.9, lineCap:'round' })); }
   function pt(id, cor, txt) { var s = tripData.stops[id]; tripLayer.addLayer(L.marker([s[1], s[2]], { icon: mkIcon('<div class="stopmk" style="background:' + cor + '"></div>', 14, 14) }).bindTooltip(txt + ': ' + s[0])); }
   pt(b.x.stopAll.i, '#22C55E', 'Embarque'); pt(b.x.stopTll.i, '#FACC15', 'Troca (desça do ' + b.x.svc + ')'); pt(b.y.stopTll.i, '#FACC15', 'Troca (suba no ' + b.y.svc + ')'); pt(b.y.stopBll.i, '#F87171', 'Desembarque');
   var saLL = tripData.stops[b.x.stopAll.i], tLL = tripData.stops[b.y.stopTll.i], xtLL = tripData.stops[b.x.stopTll.i], sbLL = tripData.stops[b.y.stopBll.i];
@@ -1170,7 +1170,7 @@ function selectTrip(i, fit) {
   var pts = Planner.slice(sh, t.stopAll.along, t.stopBll.along);
   var sa0 = tripData.stops[t.stopAll.i], sb0 = tripData.stops[t.stopBll.i];
   pts.unshift([sa0[1], sa0[2]]); pts.push([sb0[1], sb0[2]]);   // fecha o vão entre o traçado e a parada, para o ônibus e a caminhada se encontrarem
-  if (pts.length > 1) tripLayer.addLayer(L.polyline(pts, { color:'#38BDF8', weight:5, opacity:.85 }));
+  if (pts.length > 1) { tripLayer.addLayer(L.polyline(pts, { color:'#fff', weight:9, opacity:.5, lineCap:'round' })); tripLayer.addLayer(L.polyline(pts, { color:'#A855F7', weight:6, opacity:.95, lineCap:'round' })); }
   var sa = tripData.stops[t.stopAll.i], sb = tripData.stops[t.stopBll.i];
   tripLayer.addLayer(L.marker([sa[1], sa[2]], { icon: mkIcon('<div class="stopmk" style="background:#22C55E"></div>', 14, 14) }).bindTooltip('Embarque: ' + sa[0]));
   tripLayer.addLayer(L.marker([sb[1], sb[2]], { icon: mkIcon('<div class="stopmk" style="background:#F87171"></div>', 14, 14) }).bindTooltip('Desembarque: ' + sb[0]));
@@ -1413,7 +1413,8 @@ function desenharLinha(l, fit) {
   Planner.prep(sh);
   var pts = [];
   for (var i = 0; i < sh.n; i++) pts.push([sh.p[2 * i], sh.p[2 * i + 1]]);
-  tripLayer.addLayer(L.polyline(pts, { color:'#38BDF8', weight:4, opacity:.6 }));
+  tripLayer.addLayer(L.polyline(pts, { color:'#fff', weight:9, opacity:.4, lineCap:'round' }));
+  tripLayer.addLayer(L.polyline(pts, { color:'#A855F7', weight:6, opacity:.75, lineCap:'round' }));
   tripLayer.addLayer(L.marker(l.stopLL, { icon: mkIcon('<div class="stopmk" style="background:#22C55E"></div>', 14, 14) }).bindTooltip('Parada: ' + l.stop));
   var fp = drawApproach(sh, l.stopAll.along, l.stopLL, l.buses, l.svc);
   if (fit) {
