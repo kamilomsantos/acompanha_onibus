@@ -110,6 +110,9 @@ body { display:flex; flex-direction:column; }
 .tsub { font-size:.72rem; color:var(--muted); margin-top:4px; line-height:1.45; }
 .tsub b { color:var(--green); }
 .tnote { padding:7px 14px; font-size:.62rem; color:var(--muted); border-bottom:1px solid var(--border); line-height:1.4; }
+#sort-toggle { display:flex; gap:6px; padding:6px 14px; border-bottom:1px solid var(--border); }
+.sort-btn { flex:1; padding:5px 8px; border:1px solid var(--border); border-radius:6px; background:none; color:var(--muted); font-size:.68rem; font-weight:600; cursor:pointer; transition:background .15s,color .15s; text-align:center; }
+.sort-btn.ativo { background:var(--yellow); color:#000; border-color:var(--yellow); }
 #side { display:contents; }
 .topbar { order:1; } .search-bar { order:2; } #map { order:3; } .tabs { order:4; } .panel { order:5; }
 .tabs { display:flex; background:var(--surf); border-top:1px solid var(--border); flex-shrink:0; z-index:5; }
@@ -405,6 +408,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
   </div>
   <div id="panel-body">
     <div id="chips" class="chips" hidden></div>
+    <div id="sort-toggle" hidden>
+      <button class="sort-btn ativo" id="sort-tempo">⏱ Rápido</button>
+      <button class="sort-btn" id="sort-destino">📍 Próximo ao destino</button>
+    </div>
     <div id="bus-list"><div class="empty">Defina a origem (GPS, endereço ou toque no mapa) para ver os ônibus perto de você.</div></div>
   </div>
 </div>
@@ -416,7 +423,7 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <script src="planner.js?v=20261006-6"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261025-1';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261025-4';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -834,8 +841,7 @@ function mostrarSalvos(tipo, drop, inp, onSelect) {
     d.addEventListener('click', function() {
       drop.classList.remove('open');
       mapPickMode = tipo;
-      $('search-bar').classList.add('min'); updateSearchSum();
-      showToast('Toque no mapa para marcar ' + (tipo === 'orig' ? 'a origem' : 'o destino'), 'warn', 4000);
+      showToast('Toque no mapa para marcar ' + (tipo === 'orig' ? 'a origem' : 'o destino'), 'warn', 5000);
     });
     drop.appendChild(d);
   })();
@@ -948,6 +954,32 @@ function tracarRota() {
 }
 $('btn-tracar').addEventListener('click', tracarRota);
 
+function aplicarSortPrioridade() {
+  if (!tripPlan.length) return;
+  if (sortPrioridade === 'destino') {
+    tripPlan.sort(function(a, b) { return a.walkBm !== b.walkBm ? a.walkBm - b.walkBm : a.total - b.total; });
+  } else {
+    tripPlan.sort(function(a, b) { return faixaCaminhada(a) !== faixaCaminhada(b) ? faixaCaminhada(a) - faixaCaminhada(b) : a.total - b.total; });
+  }
+  tripSel = -1; baldSel = -1; tripSelKey = null; baldSelKey = null;
+  var melhor = null;
+  tripPlan.forEach(function(t, i) {
+    if (!melhor || (sortPrioridade === 'destino' ? (t.walkBm < melhor.v || (t.walkBm === melhor.v && t.total < melhor.total)) : t.total < melhor.total))
+      melhor = { v: t.walkBm, total: t.total, i: i, tipo: 'd' };
+  });
+  baldPlan.forEach(function(b, i) {
+    if (!melhor || b.total < melhor.total) melhor = { v: 9999, total: b.total, i: i, tipo: 'b' };
+  });
+  if (melhor) {
+    if (melhor.tipo === 'd') { tripSel = melhor.i; tripSelKey = tripKey(tripPlan[tripSel]); }
+    else { baldSel = melhor.i; baldSelKey = baldPlan[baldSel].key; }
+  }
+  renderTrips();
+  setTimeout(function() { map.invalidateSize(); if (tripSel >= 0) selectTrip(tripSel, false); else if (baldSel >= 0) selectBald(baldSel, false); }, 90);
+}
+$('sort-tempo').addEventListener('click', function() { if (sortPrioridade === 'tempo') return; sortPrioridade = 'tempo'; aplicarSortPrioridade(); });
+$('sort-destino').addEventListener('click', function() { if (sortPrioridade === 'destino') return; sortPrioridade = 'destino'; aplicarSortPrioridade(); });
+
 // Inverte origem e destino (campos, pontos no mapa e favoritos) e refaz a busca se já havia viagens traçadas.
 function inverter() {
   var oi = $('orig-input'), di = $('dest-input');
@@ -980,6 +1012,7 @@ function hhmm(d) { return d.toLocaleTimeString('pt-BR', { timeZone:'America/Sao_
 
 var RAIO_EMBARQUE_M = 200, nPerto = 0;
 var tripSelKey = null, baldPlan = [], baldSel = -1, baldSelKey = null;
+var sortPrioridade = 'tempo';
 function tripKey(t) { return t.svc + '|' + t.dir; }
 // Faixas de caminhada até o embarque, em sequência: 200, 500, 1000 e 2000 m
 var FAIXAS_M = [200, 500, 1000, 2000];
@@ -1025,7 +1058,7 @@ function calcularViagens(novo) {
     } catch (e) { baldPlan = []; }
   }
   // 'Traçar' (novo) escolhe de novo; nas atualizações automáticas mantém a escolha do usuário
-  if (novo) { tripSelKey = null; baldSelKey = null; $('panel').classList.remove('min'); }
+  if (novo) { tripSelKey = null; baldSelKey = null; sortPrioridade = 'tempo'; $('panel').classList.remove('min'); }
   baldSel = -1; tripSel = -1;
   if (baldSelKey) baldPlan.forEach(function(b, i) { if (b.key === baldSelKey) baldSel = i; });
   if (baldSel < 0 && tripSelKey) tripPlan.forEach(function(t, i) { if (tripKey(t) === tripSelKey) tripSel = i; });
@@ -1052,6 +1085,9 @@ function calcularViagens(novo) {
 function renderTrips() {
   var list = $('bus-list');
   $('chips').hidden = true;
+  $('sort-toggle').hidden = false;
+  $('sort-tempo').className = 'sort-btn' + (sortPrioridade === 'tempo' ? ' ativo' : '');
+  $('sort-destino').className = 'sort-btn' + (sortPrioridade === 'destino' ? ' ativo' : '');
   busLayer.clearLayers();
   $('panel-title').textContent = 'Viagens de A para B';
   $('counter').textContent = tripPlan.length + (tripPlan.length === 1 ? ' linha' : ' linhas') + (baldPlan.length ? ' + ' + baldPlan.length + ' c/ baldeação' : '');
@@ -1313,7 +1349,7 @@ function usarRota(r) {
 
 function renderRecorrentes() {
   var list = $('bus-list'), rotas = lsGet(LS.rotas);
-  $('chips').hidden = true;
+  $('chips').hidden = true; $('sort-toggle').hidden = true;
   busLayer.clearLayers(); tripLayer.clearLayers();
   $('panel-title').textContent = 'Rotas recorrentes';
   $('counter').textContent = rotas.length + (rotas.length === 1 ? ' rota' : ' rotas');
@@ -1382,7 +1418,7 @@ $('btn-lin-loc').addEventListener('click', function() { locAtual = null; pedirLo
 // Linhas que passam perto da localização atual, nos dois sentidos (a parada mais perto de cada sentido).
 function renderLinhas() {
   var list = $('bus-list');
-  $('chips').hidden = true;
+  $('chips').hidden = true; $('sort-toggle').hidden = true;
   busLayer.clearLayers();
   $('panel-title').textContent = 'Linhas perto de você';
   var ref = locAtual;
@@ -1539,6 +1575,7 @@ function render() {
   if (planActive) { renderTrips(); return; }
   tripLayer.clearLayers();
   updatePanelSum();
+  $('sort-toggle').hidden = true;
   var ref = referencia();
   var list = $('bus-list'), chips = $('chips');
 
@@ -1696,7 +1733,7 @@ function renderEncontro() {
   list.innerHTML = '';
   $('panel-title').textContent = 'Encontro em tempo real';
   $('counter').textContent = '';
-  $('chips').hidden = true;
+  $('chips').hidden = true; $('sort-toggle').hidden = true;
 
   var div = document.createElement('div'); div.className = 'enc-card';
   if (!sessaoAtiva) {

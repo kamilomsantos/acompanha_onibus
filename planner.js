@@ -172,7 +172,10 @@
       };
     });
 
-    return Object.keys(best).map(function (k) { return best[k]; }).sort(function (a, b) { return a.total - b.total; });
+    return Object.keys(best).map(function (k) { return best[k]; }).sort(function (a, b) {
+      if (opt.sortBy === 'destino') return a.walkBm !== b.walkBm ? a.walkBm - b.walkBm : a.total - b.total;
+      return a.total - b.total;
+    });
   }
 
   // Viagens com UMA baldeação A -> (linha X) -> parada de troca -> (linha Y) -> B.

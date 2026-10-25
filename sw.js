@@ -4,7 +4,7 @@
 //             sem cache para GPS/Worker (tempo real).
 'use strict';
 
-const CACHE  = 'ae-piloto-v20261025-3';
+const CACHE  = 'ae-piloto-v20261025-4';
 const CACHE_ONLY = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
