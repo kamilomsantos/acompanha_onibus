@@ -913,7 +913,7 @@ function tracarRota() {
       });
     })
     .catch(function() { showToast('Não foi possível buscar agora. Verifique a internet.', 'error', 5000); })
-    .then(function() { planBusy = false; $('btn-tracar').textContent = 'Traçar'; });
+    .then(function() { planBusy = false; $('btn-tracar').textContent = 'Partir'; });
 }
 $('btn-tracar').addEventListener('click', tracarRota);
 
