@@ -484,6 +484,9 @@
   var ORDEM_PADRAO = ['presidente', 'governador-rj', 'senado-rj', 'governador-pa', 'depfed-rj', 'governador-sp', 'depestad-rj'];
   var ZOOMS = [0.7, 0.85, 1, 1.2, 1.4, 1.7];          // tamanho do conteúdo; índice 2 = normal
   var Z_NORMAL = 2;
+  // Tamanho padrão por card: índice de ZOOMS e LARGURAS respectivamente
+  var Z_DEFAULT = { 'presidente': 3 };           // 1.2x
+  var W_DEFAULT = { 'presidente': 4 };           // 12 colunas = linha inteira
   var LARGURAS = [3, 4, 6, 8, 12];                    // colunas de 12: 1/4, 1/3, 1/2, 2/3, linha inteira
   var LINHA_PX = 4, GAP_PX = 6;                       // grade "tijolinho": linhas de 4px; bloco ocupa N linhas
   var L_PADRAO = function() { return window.innerWidth >= 1100 ? 1 : 2; };   // telas largas: 1/3; telas estreitas: 1/2
@@ -526,8 +529,8 @@
     });
     cartoes().forEach(function(c) {
       var id = c.getAttribute('data-id');
-      aplicarZoom(c, zs && typeof zs[id] === 'number' ? zs[id] : Z_NORMAL);
-      aplicarLargura(c, ws && typeof ws[id] === 'number' ? ws[id] : L_PADRAO());
+      aplicarZoom(c, zs && typeof zs[id] === 'number' ? zs[id] : (Z_DEFAULT[id] !== undefined ? Z_DEFAULT[id] : Z_NORMAL));
+      aplicarLargura(c, ws && typeof ws[id] === 'number' ? ws[id] : (W_DEFAULT[id] !== undefined ? W_DEFAULT[id] : L_PADRAO()));
     });
   }
 
