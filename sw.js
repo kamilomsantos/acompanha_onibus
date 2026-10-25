@@ -4,7 +4,7 @@
 //             sem cache para GPS/Worker (tempo real).
 'use strict';
 
-const CACHE  = 'ae-piloto-v20261025-5';
+const CACHE  = 'ae-piloto-v20261025-6';
 const CACHE_ONLY = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
@@ -16,6 +16,7 @@ const CACHE_ONLY = [
 const NETWORK_FIRST = [
   '/acompanha_onibus/',
   '/acompanha_onibus/index.html',
+  '/acompanha_onibus/apuracao.html',
   '/acompanha_onibus/planner.js',
   '/acompanha_onibus/linhas.json',
 ];
@@ -40,6 +41,7 @@ self.addEventListener('fetch', function(e) {
   var url = e.request.url;
   // Tempo real: nunca cachear
   if (url.includes('workers.dev') || url.includes('mobilidade.rio') ||
+      url.includes('resultados.tse.jus.br') ||
       url.includes('githubusercontent.com/kamilomsantos') || url.includes('radarmeteorologico.com.br')) {
     return;
   }
