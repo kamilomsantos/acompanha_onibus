@@ -435,6 +435,7 @@ var buses = [], prevPos = {}, dataUpdated = null, apiErrorState = false;
 var filterLines = [];
 var tripData = null, tripPlan = [], planActive = false, tripSel = -1, tripLayer = null, planBusy = false;
 var encontroLayer = null, sessaoCodigo = null, sessaoPid = null, sessaoAtiva = false, _pollH = null, _shareH = null;
+var mapPickMode = null;   // 'orig' | 'dest' | null — modo de marcar ponto no mapa
 var _minhaPos = null, _proximoSince = null, _expiryH = null;
 var PROX_M = 500, EXPIRY_MS = 15 * 60 * 1000;
 
@@ -475,8 +476,15 @@ busLayer = L.layerGroup().addTo(map);
 tripLayer = L.layerGroup().addTo(map);
 encontroLayer = L.layerGroup().addTo(map);
 map.on('click', function(e) {
-  setOrigem(e.latlng.lat, e.latlng.lng, 'ponto no mapa');
-  $('orig-input').value = 'Ponto no mapa'; dirty.orig = false;
+  var modo = mapPickMode || 'orig';
+  mapPickMode = null;
+  if (modo === 'dest') {
+    setDestino(e.latlng.lat, e.latlng.lng, 'ponto no mapa');
+    $('dest-input').value = 'Ponto no mapa'; dirty.dest = false;
+  } else {
+    setOrigem(e.latlng.lat, e.latlng.lng, 'ponto no mapa');
+    $('orig-input').value = 'Ponto no mapa'; dirty.orig = false;
+  }
 });
 
 function mkIcon(html, w, h) { return L.divIcon({ className:'', html:html, iconSize:[w,h], iconAnchor:[w/2,h/2] }); }
@@ -812,8 +820,26 @@ $('dest-fav').addEventListener('click', function() { alternarFavorito('dest'); }
 
 function mostrarSalvos(tipo, drop, inp, onSelect) {
   var favs = lsGet(LS.fav), rec = lsGet(LS[tipo]).filter(function(r) { return !favs.some(function(f) { return mesmoLocal(f, r); }); });
-  if (!favs.length && !rec.length) { drop.classList.remove('open'); return; }
   drop.innerHTML = '';
+  // Opção fixa: marcar no mapa
+  (function() {
+    var d = document.createElement('div'); d.className = 'ac-item';
+    var ic = document.createElement('span'); ic.className = 'ac-icon'; ic.textContent = '🗺️';
+    var tx = document.createElement('div');
+    var mn = document.createElement('div'); mn.className = 'ac-main'; mn.textContent = 'Marcar no mapa';
+    var sb = document.createElement('div'); sb.className = 'ac-sub'; sb.textContent = tipo === 'orig' ? 'Toque no mapa para definir a origem' : 'Toque no mapa para definir o destino';
+    tx.appendChild(mn); tx.appendChild(sb);
+    d.appendChild(ic); d.appendChild(tx);
+    d.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    d.addEventListener('click', function() {
+      drop.classList.remove('open');
+      mapPickMode = tipo;
+      $('search-bar').classList.add('min'); updateSearchSum();
+      showToast('Toque no mapa para marcar ' + (tipo === 'orig' ? 'a origem' : 'o destino'), 'warn', 4000);
+    });
+    drop.appendChild(d);
+  })();
+  if (!favs.length && !rec.length) { drop.classList.add('open'); return; }
   function cabecalho(txt) { var h = document.createElement('div'); h.className = 'ac-head'; h.textContent = txt; drop.appendChild(h); }
   function item(x, ehFav, idx) {
     var div = document.createElement('div'); div.className = 'ac-item';
