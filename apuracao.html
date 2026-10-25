@@ -272,11 +272,14 @@
     'presidente': { cod:6258, uf:'br', cargo:'0001', pstId:'pst-presidente', rowsId:'rows-presidente', meus:['13'], topN:2 }
   };
 
-  // Arquivo real do TSE (confirmado com dado de 04/10/2026):
-  //   <BASE>/<cod>/dados/<uf>/<uf>-c<cargo>-e<cod 6 dígitos>-u.json
+  // Arquivo real do TSE: <BASE>/<cod>/dados/<uf>/<uf>-c<cargo>-e<cod 6d>-u.json
+  // Tenta cod+3, cod+2, cod+1, cod (2° turno tem código maior → encontrado primeiro)
   function urlsDoCargo(cfg) {
-    var e = String(cfg.cod); while (e.length < 6) e = '0' + e;
-    return [BASE + '/' + cfg.cod + '/dados/' + cfg.uf + '/' + cfg.uf + '-c' + cfg.cargo + '-e' + e + '-u.json'];
+    var cods = [cfg.cod+3, cfg.cod+2, cfg.cod+1, cfg.cod];
+    return cods.map(function(c) {
+      var e = String(c); while (e.length < 6) e = '0' + e;
+      return BASE + '/' + c + '/dados/' + cfg.uf + '/' + cfg.uf + '-c' + cfg.cargo + '-e' + e + '-u.json';
+    });
   }
 
   // O TSE manda números com vírgula decimal ("49,55"). Candidatos ficam em carg[].agr[].par[].cand[].
@@ -407,6 +410,8 @@
   function fetchAll(){
     if(busy)return; busy=true;
     proxAt = Date.now() + INTERVALO;
+    // Reseta URL cacheada para re-detectar código correto a cada ciclo (útil no 2° turno)
+    Object.keys(CARGOS).forEach(function(k){ CARGOS[k].urlOk = null; });
     setStatus('live','Buscando TSE...');
     var keys=Object.keys(CARGOS), done=0, ok=0;
     keys.forEach(function(k){
