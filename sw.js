@@ -3,7 +3,7 @@
 //             network-first para o GPS (sempre fresco).
 'use strict';
 
-const CACHE  = 'ae-piloto-v20261025-1';
+const CACHE  = 'ae-piloto-v20261025-2';
 const SHELL  = [
   '/acompanha_onibus/',
   '/acompanha_onibus/index.html',
