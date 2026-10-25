@@ -319,11 +319,13 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 .btn-reg:hover { border-color:var(--green); color:var(--green); }
 .btn-reg.done { border-color:var(--green); color:var(--green); background:var(--gdim); }
 /* ─── Alerta INMET ─── */
-#alerta-bar { display:flex; align-items:center; gap:8px; padding:7px 14px; font-size:.74rem; flex-shrink:0; border-bottom:1px solid rgba(245,158,11,.3); background:rgba(245,158,11,.1); color:var(--fg); order:0; }
+#alerta-bar { display:flex; align-items:flex-start; gap:8px; padding:8px 14px; font-size:.74rem; flex-shrink:0; border-bottom:1px solid rgba(245,158,11,.3); background:rgba(245,158,11,.1); color:var(--fg); order:0; }
 #alerta-bar.perigo { background:rgba(248,113,113,.12); border-bottom-color:rgba(248,113,113,.4); }
-.alerta-icon { font-size:.88rem; flex-shrink:0; }
-.alerta-txt { flex:1; min-width:0; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.alerta-dismiss { background:none; border:none; color:var(--muted); font-size:.9rem; cursor:pointer; padding:0 0 0 8px; flex-shrink:0; line-height:1; }
+.alerta-icon { font-size:.9rem; flex-shrink:0; margin-top:1px; }
+.alerta-corpo { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.alerta-titulo { font-weight:700; font-size:.76rem; line-height:1.3; }
+.alerta-detalhe { font-size:.68rem; color:var(--muted); line-height:1.4; }
+.alerta-dismiss { background:none; border:none; color:var(--muted); font-size:.9rem; cursor:pointer; padding:0 0 0 8px; flex-shrink:0; line-height:1; margin-top:1px; }
 </style>
 </head>
 <body>
@@ -331,7 +333,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div id="side">
 <div id="alerta-bar" hidden>
   <span class="alerta-icon">⚠</span>
-  <span class="alerta-txt" id="alerta-txt"></span>
+  <div class="alerta-corpo">
+    <span id="alerta-titulo"></span>
+    <span class="alerta-detalhe" id="alerta-detalhe"></span>
+  </div>
   <button class="alerta-dismiss" id="alerta-dismiss" aria-label="Fechar alerta">✕</button>
 </div>
 <div class="topbar">
@@ -1846,9 +1851,10 @@ var histSaida = (function() {
         var dismissed = '';
         try { dismissed = localStorage.getItem(ALERTA_KEY) || ''; } catch(e) {}
         if (key === dismissed) { bar.hidden = true; return; }
-        var risco = top.riscos && top.riscos[0] ? top.riscos[0] : '';
-        if (risco.length > 80) risco = risco.substring(0, 77) + '…';
-        $('alerta-txt').textContent = top.evento + (top.severidade ? ' · ' + top.severidade : '') + (risco ? ' — ' + risco : '');
+        $('alerta-titulo').textContent = top.evento + (top.severidade ? ' · ' + top.severidade : '');
+        var riscos = top.riscos && top.riscos.length ? top.riscos.join('. ') + '.' : '';
+        var validade = top.fim ? ' Válido até ' + top.fim + '.' : '';
+        $('alerta-detalhe').textContent = riscos + validade;
         bar.dataset.alertaId = key;
         bar.className = (top.nivel >= 2) ? 'perigo' : '';
         bar.hidden = false;
