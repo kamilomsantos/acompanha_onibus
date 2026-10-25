@@ -319,7 +319,7 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 .btn-reg:hover { border-color:var(--green); color:var(--green); }
 .btn-reg.done { border-color:var(--green); color:var(--green); background:var(--gdim); }
 /* ─── Alerta INMET ─── */
-#alerta-bar { display:flex; align-items:center; gap:8px; padding:7px 14px; font-size:.74rem; flex-shrink:0; border-bottom:1px solid rgba(245,158,11,.3); background:rgba(245,158,11,.1); color:var(--fg); order:1; }
+#alerta-bar { display:flex; align-items:center; gap:8px; padding:7px 14px; font-size:.74rem; flex-shrink:0; border-bottom:1px solid rgba(245,158,11,.3); background:rgba(245,158,11,.1); color:var(--fg); order:0; }
 #alerta-bar.perigo { background:rgba(248,113,113,.12); border-bottom-color:rgba(248,113,113,.4); }
 .alerta-icon { font-size:.88rem; flex-shrink:0; }
 .alerta-txt { flex:1; min-width:0; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -329,6 +329,11 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <body>
 
 <div id="side">
+<div id="alerta-bar" hidden>
+  <span class="alerta-icon">⚠</span>
+  <span class="alerta-txt" id="alerta-txt"></span>
+  <button class="alerta-dismiss" id="alerta-dismiss" aria-label="Fechar alerta">✕</button>
+</div>
 <div class="topbar">
   <div class="logo">RIO</div>
   <div class="topbar-info">
@@ -338,11 +343,6 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
   <span id="counter">--</span>
   <div class="dot wait" id="sdot"></div>
   <button type="button" class="btn-tema" id="btn-tema" aria-label="Escolher tema" aria-haspopup="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
-</div>
-<div id="alerta-bar" hidden>
-  <span class="alerta-icon">⚠</span>
-  <span class="alerta-txt" id="alerta-txt"></span>
-  <button class="alerta-dismiss" id="alerta-dismiss" aria-label="Fechar alerta">✕</button>
 </div>
 <div class="menu-tema" id="menu-tema" hidden><button type="button" data-tema="auto">🌗 Automático (do aparelho)<span class="ck">✓</span></button><button type="button" data-tema="light">☀️ Claro<span class="ck">✓</span></button><button type="button" data-tema="dark">🌙 Escuro<span class="ck">✓</span></button><div style="height:1px;background:var(--border);margin:6px 4px"></div><button type="button" id="btn-registrar" style="font-size:.8rem">📍 Registrar minhas saídas<span class="ck">✓</span></button><div style="padding:6px 12px 4px;font-size:.66rem;color:var(--muted)">Versão <span id="app-versao"></span></div></div>
 
@@ -375,7 +375,7 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
       <button type="button" class="fav-btn" id="dest-fav" aria-label="Favoritar destino">☆</button>
       <div class="ac-drop" id="dest-drop"></div>
     </div>
-    <button class="btn-ir" id="btn-tracar">Partir</button>
+    <button class="btn-ir" id="btn-tracar">Partiu</button>
   </div>
   <div class="search-row">
     <div class="field-wrap">
@@ -913,7 +913,7 @@ function tracarRota() {
       });
     })
     .catch(function() { showToast('Não foi possível buscar agora. Verifique a internet.', 'error', 5000); })
-    .then(function() { planBusy = false; $('btn-tracar').textContent = 'Partir'; });
+    .then(function() { planBusy = false; $('btn-tracar').textContent = 'Partiu'; });
 }
 $('btn-tracar').addEventListener('click', tracarRota);
 
