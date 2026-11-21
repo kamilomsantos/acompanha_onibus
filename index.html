@@ -110,6 +110,11 @@ body { display:flex; flex-direction:column; }
 .tsub { font-size:.72rem; color:var(--muted); margin-top:4px; line-height:1.45; }
 .tsub b { color:var(--green); }
 .tnote { padding:7px 14px; font-size:.62rem; color:var(--muted); border-bottom:1px solid var(--border); line-height:1.4; }
+.rota-toggle { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:8px 14px; border-bottom:1px solid var(--border); }
+.rt-label { font-size:.62rem; color:var(--muted); width:100%; }
+.rt-btn { flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:none; color:var(--muted); font-size:.72rem; font-weight:600; cursor:pointer; text-align:center; font-family:'Inter',sans-serif; }
+.rt-btn.ativo { background:var(--yellow); color:#000; border-color:var(--yellow); }
+.rt-dica { font-size:.62rem; color:var(--muted); width:100%; line-height:1.35; }
 #side { display:contents; }
 .topbar { order:1; } .search-bar { order:2; } #map { order:3; } .tabs { order:4; } .panel { order:5; }
 .tabs { display:flex; background:var(--surf); border-top:1px solid var(--border); flex-shrink:0; z-index:5; }
@@ -416,7 +421,7 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <script src="planner.js?v=20261121-1"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261121-1';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261121-3';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -978,6 +983,23 @@ function ensureLinhas() {
 function hhmm(d) { return d.toLocaleTimeString('pt-BR', { timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit' }); }
 
 var RAIO_EMBARQUE_M = 200, nPerto = 0;
+// Tipo de rota (escolha do usuário, lembrada no aparelho):
+//   normal = como sempre foi: agrupa por distância de caminhada até o embarque e prefere a que deixa mais perto do destino;
+//   rapida = ordena pelo menor tempo total até chegar a B (inclui baldeação que poupa 3 min ou mais).
+// Normal (ajuste de 21/11/2026): o embarque tem que ser no próprio ponto de saída, sem caminhar até a parada: só entram linhas
+// com parada a até EMBARQUE_ZERO_M de A (tolera a imprecisão do GPS/toque no mapa). Se nenhuma passa ali, mostra as mais
+// próximas com um aviso (semAndarFalha); semAndarAtivo = a lista está restrita ao ponto de saída.
+var EMBARQUE_ZERO_M = 100, semAndarAtivo = false, semAndarFalha = false;
+var tipoRota = 'normal';
+try { if (localStorage.getItem('aep.tipoRota') === 'rapida') tipoRota = 'rapida'; } catch (e) {}
+function definirTipoRota(v) {
+  if (v === tipoRota) return;
+  tipoRota = v;
+  try { localStorage.setItem('aep.tipoRota', v); } catch (e) {}
+  calcularViagens(true);
+}
+function porProximidade(a, b) { return a.walkBm !== b.walkBm ? a.walkBm - b.walkBm : a.total - b.total; }
+function porTempo(a, b) { return a.total !== b.total ? a.total - b.total : a.walkBm - b.walkBm; }
 var tripSelKey = null, baldPlan = [], baldSel = -1, baldSelKey = null;
 function tripKey(t) { return t.svc + '|' + t.dir; }
 // Faixas de caminhada até o embarque, em sequência: 200, 500, 1000 e 2000 m
@@ -1000,13 +1022,21 @@ function calcularViagens(novo) {
   perto.concat(longe).forEach(function(t) { jaVistas[tripKey(t)] = true; });
   var brtLongo = Planner.plan(tripData, buses, originLL, destLL, agora, { maxWalkA: 2000, maxWalkB: 2000, soBrt: true })
     .filter(function(t) { return !jaVistas[tripKey(t)]; });
-  var resto = longe.concat(brtLongo).sort(function(a, b) { return a.walkBm !== b.walkBm ? a.walkBm - b.walkBm : a.total - b.total; });
+  var rapida = tipoRota === 'rapida';
+  var resto = longe.concat(brtLongo).sort(porProximidade);
   nPerto = perto.length;
   tripPlan = perto.concat(resto);
-  tripPlan.sort(function(a, b) { return a.walkBm !== b.walkBm ? a.walkBm - b.walkBm : a.total - b.total; });
+  tripPlan.sort(rapida ? porTempo : porProximidade);
   if (filterLines.length) {
     tripPlan = tripPlan.filter(function(t) { return filterLines.indexOf(normLine(t.svc)) >= 0; });
     nPerto = tripPlan.filter(function(t) { return t.walkAm <= RAIO_EMBARQUE_M; }).length;
+  }
+  // Normal: embarque no ponto de saída, sem caminhar. Guarda todas as diretas para o caso de nenhuma passar no ponto.
+  var todasDiretas = tripPlan, zeroDiretas = null;
+  semAndarAtivo = false; semAndarFalha = false;
+  if (!rapida) {
+    zeroDiretas = tripPlan.filter(function(t) { return t.walkAm <= EMBARQUE_ZERO_M; });
+    if (zeroDiretas.length) tripPlan = zeroDiretas;
   }
   // baldeação: só quando não há linha direta, ou quando ela poupa 10 min ou mais
   baldPlan = [];
@@ -1021,8 +1051,16 @@ function calcularViagens(novo) {
         .forEach(function(b) { if (!unicas[b.key] || b.total < unicas[b.key].total) unicas[b.key] = b; });
       baldPlan = Object.keys(unicas).map(function(k) { return unicas[k]; })
         .sort(function(a, b) { return a.total - b.total; }).slice(0, 8)
-        .filter(function(b) { return b.total < melhorDireta - 10; });
+        .filter(function(b) { return b.total < melhorDireta - (rapida ? 3 : 10); });
     } catch (e) { baldPlan = []; }
+  }
+  if (!rapida) {
+    var zeroBald = baldPlan.filter(function(b) { return b.x.walkAm <= EMBARQUE_ZERO_M; });
+    if (zeroDiretas.length || zeroBald.length) {
+      tripPlan = zeroDiretas; baldPlan = zeroBald; nPerto = tripPlan.length; semAndarAtivo = true;
+    } else {
+      tripPlan = todasDiretas; semAndarFalha = !!(tripPlan.length || baldPlan.length);   // ninguém passa no ponto: mostra as mais próximas, com aviso
+    }
   }
   // 'Traçar' (novo) escolhe de novo; nas atualizações automáticas mantém a escolha do usuário
   if (novo) { tripSelKey = null; baldSelKey = null; $('panel').classList.remove('min'); }
@@ -1030,11 +1068,16 @@ function calcularViagens(novo) {
   if (baldSelKey) baldPlan.forEach(function(b, i) { if (b.key === baldSelKey) baldSel = i; });
   if (baldSel < 0 && tripSelKey) tripPlan.forEach(function(t, i) { if (tripKey(t) === tripSelKey) tripSel = i; });
   if (baldSel >= 0) tripSelKey = null;
-  // nada escolhido: a viagem mais PRÓXIMA AO DESTINO (menor walkBm) já vem selecionada; as outras ficam na lista para trocar
+  // nada escolhido: Normal = a viagem mais PRÓXIMA AO DESTINO (menor walkBm); Rápida = a de MENOR TEMPO total (direta ou com baldeação).
+  // As outras ficam na lista para trocar.
   var autoSel = false;
   if (tripSel < 0 && baldSel < 0) {
     var melhor = null;
-    tripPlan.forEach(function(t, i) { if (!melhor || t.walkBm < melhor.walkBm || (t.walkBm === melhor.walkBm && t.total < melhor.total)) melhor = { walkBm: t.walkBm, total: t.total, i: i, tipo: 'd' }; });
+    tripPlan.forEach(function(t, i) {
+      var melhorQue = !melhor || (rapida ? (t.total < melhor.total || (t.total === melhor.total && t.walkBm < melhor.walkBm))
+        : (t.walkBm < melhor.walkBm || (t.walkBm === melhor.walkBm && t.total < melhor.total)));
+      if (melhorQue) melhor = { walkBm: t.walkBm, total: t.total, i: i, tipo: 'd' };
+    });
     baldPlan.forEach(function(b, i) { if (!melhor || b.total < melhor.total) melhor = { walkBm: 9999, total: b.total, i: i, tipo: 'b' }; });
     if (melhor) {
       autoSel = true;
@@ -1056,9 +1099,20 @@ function renderTrips() {
   $('panel-title').textContent = 'Viagens de A para B';
   $('counter').textContent = tripPlan.length + (tripPlan.length === 1 ? ' linha' : ' linhas') + (baldPlan.length ? ' + ' + baldPlan.length + ' c/ baldeação' : '');
   list.innerHTML = '';
+  var rapida = tipoRota === 'rapida';
+  var tg = document.createElement('div'); tg.className = 'rota-toggle';
+  tg.innerHTML = '<span class="rt-label">Tipo de rota</span>'
+    + '<button type="button" class="rt-btn' + (rapida ? '' : ' ativo') + '" data-tipo="normal">🚶 Normal</button>'
+    + '<button type="button" class="rt-btn' + (rapida ? ' ativo' : '') + '" data-tipo="rapida">⚡ Rápida</button>'
+    + '<span class="rt-dica">' + (rapida ? 'Rápida: as opções que chegam mais cedo ao destino vêm primeiro.'
+      : 'Normal: só linhas que passam no seu ponto de saída, sem caminhar até o embarque (até ' + EMBARQUE_ZERO_M + ' m); prefere a que deixa você mais perto do destino.') + '</span>';
+  Array.prototype.forEach.call(tg.querySelectorAll('.rt-btn'), function(b) {
+    b.addEventListener('click', function() { definirTipoRota(b.getAttribute('data-tipo')); });
+  });
+  list.appendChild(tg);
   var note = document.createElement('div'); note.className = 'tnote';
   note.textContent = 'Atualizado às ' + hhmm(new Date()) + ' · dados dos ônibus de ' + String(dataUpdated || '').slice(11, 16)
-    + ' · estimativa pela grade horária das linhas (linhas diretas; baldeação só quando não há direta ou poupa 10 min ou mais). No mapa: azul = sua viagem, vermelho tracejado = ônibus até o ponto de embarque, pontilhado preto = trecho a pé.';
+    + ' · estimativa pela grade horária das linhas (linhas diretas; baldeação só quando não há direta ou poupa ' + (rapida ? '3' : '10') + ' min ou mais). No mapa: azul = sua viagem, vermelho tracejado = ônibus até o ponto de embarque, pontilhado preto = trecho a pé.';
   list.appendChild(note);
   var idade = dataUpdated ? Math.round((Date.now() - Planner.rioMs(dataUpdated)) / 60000) : null;
   if (idade !== null && idade > 15) {
@@ -1139,6 +1193,15 @@ function renderTripGroups(list) {
         list.appendChild(tripCard(it.t, it.i));
       });
     });
+  }
+  // Rápida: uma lista só, na ordem do menor tempo (as paradas aparecem na ordem da melhor opção de cada uma)
+  if (tipoRota === 'rapida') { secao('Mais rápidas primeiro', 0, tripPlan.length, 8); return; }
+  // Normal com embarque no ponto de saída: uma seção só, sem faixas de caminhada
+  if (semAndarAtivo) { secao('Embarque no seu ponto de saída (sem caminhar)', 0, tripPlan.length, 8); return; }
+  if (semAndarFalha) {
+    var av = document.createElement('div'); av.className = 'tnote'; av.style.color = 'var(--amber)';
+    av.textContent = 'Nenhuma linha passa no seu ponto de saída (a até ' + EMBARQUE_ZERO_M + ' m) e chega a B agora. Estas são as opções com parada mais próxima, que exigem caminhar. Mova o ponto A para uma parada, ou use o tipo Rápida.';
+    list.appendChild(av);
   }
   if (nPerto > 0) secao('Embarque a até ' + RAIO_EMBARQUE_M + ' m da localização', 0, nPerto, 6);
   else {
