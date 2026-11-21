@@ -2,7 +2,8 @@
 // Cloudflare Workers, plano gratuito: NÃO processa o JSON (limite de ~10 ms de CPU); só repassa o corpo da
 // resposta, com CORS e cache de borda. A consolidação (posição mais recente por veículo) é feita no celular.
 //
-// Rotas:  /  ou  /sppo  -> ônibus municipais (endereço novo "conecta"; se falhar, o antigo "/gps/sppo")
+// Rotas:  /rt           -> ônibus municipais, feed GTFS-Realtime (protobuf; o app decodifica) — USAR ESTA
+//         /  ou  /sppo  -> JSON antigo do SPPO (endereços "conecta" e "/gps/sppo" fora do ar desde 11/2026; sem uso)
 //         /brt          -> BRT ({ veiculos: [...] })
 //
 // Cache (por data center): até FRESCO_S segundos devolve direto (HIT); entre FRESCO_S e VELHO_MAX_S devolve o dado
@@ -11,8 +12,11 @@
 const SPPO_NOVO   = 'https://dados.mobilidade.rio/sppo/conecta/gps';
 const SPPO_ANTIGO = 'https://dados.mobilidade.rio/gps/sppo';
 const BRT         = 'https://dados.mobilidade.rio/gps/brt';
+// Feed GTFS-Realtime (protobuf, ~185 KB) que substituiu o JSON do SPPO (os endereços acima deixaram de responder em 11/2026).
+const RT_ONIBUS   = 'https://dados.mobilidade.rio/gtfs/realtime/onibus/vehicle-positions';
 const JANELA_MIN  = 2;
-const MIN_BYTES   = { sppo: 1000, brt: 2000 };   // abaixo disso a resposta é considerada vazia/defeituosa
+const MIN_BYTES   = { sppo: 1000, brt: 2000, rt: 5000 };   // abaixo disso a resposta é considerada vazia/defeituosa
+const TIPO        = { rt: 'application/x-protobuf' };      // as demais fontes são JSON
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -52,6 +56,9 @@ const FONTES = {
   async brt() {
     return { resposta: await baixar(BRT, MIN_BYTES.brt), fonte: 'brt' };
   },
+  async rt() {
+    return { resposta: await baixar(RT_ONIBUS, MIN_BYTES.rt), fonte: 'gtfs-rt' };
+  },
 };
 
 function chaveCache(nome) { return new Request('https://smtr-cache.invalid/' + nome, { method: 'GET' }); }
@@ -62,7 +69,7 @@ async function atualizar(nome, env) {
   const guardar = new Response(resposta.body, {
     status: 200,
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Type': TIPO[nome] || 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=' + velho,
       'X-Gerado': String(Date.now()),
       'X-Fonte': fonte,
@@ -164,13 +171,14 @@ export default {
     const caminho = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
     if (caminho === '/' || caminho === '/sppo') return servir('sppo', ctx, env);
     if (caminho === '/brt') return servir('brt', ctx, env);
+    if (caminho === '/rt') return servir('rt', ctx, env);
     // ── sessão ──
     if (caminho === '/sessao/criar' && request.method === 'POST') return sessaoCriar(env);
     const mPos = caminho.match(/^\/sessao\/([A-Z0-9]{4,6})\/([^/]+)$/);
     if (mPos && request.method === 'POST') return sessaoPost(mPos[1], mPos[2], env, request);
     const mGet = caminho.match(/^\/sessao\/([A-Z0-9]{4,6})$/);
     if (mGet && request.method === 'GET') return sessaoGet(mGet[1], env);
-    return new Response(JSON.stringify({ error: 'rota desconhecida', rotas: ['/', '/sppo', '/brt', '/sessao/criar', '/sessao/:codigo'] }), {
+    return new Response(JSON.stringify({ error: 'rota desconhecida', rotas: ['/rt', '/', '/sppo', '/brt', '/sessao/criar', '/sessao/:codigo'] }), {
       status: 404,
       headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8' },
     });

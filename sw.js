@@ -4,7 +4,7 @@
 //             sem cache para GPS/Worker (tempo real).
 'use strict';
 
-const CACHE  = 'ae-piloto-v20261025-6';
+const CACHE  = 'ae-piloto-v20261121-1';
 const CACHE_ONLY = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
@@ -19,6 +19,7 @@ const NETWORK_FIRST = [
   '/acompanha_onibus/apuracao.html',
   '/acompanha_onibus/planner.js',
   '/acompanha_onibus/linhas.json',
+  '/acompanha_onibus/rotas.json',
 ];
 
 self.addEventListener('install', function(e) {

@@ -412,6 +412,69 @@
     return out;
   }
 
-  var api = { consolidarBRT: consolidarBRT, consolidar: consolidar, linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, planBaldeacao: planBaldeacao, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
+  // GTFS-Realtime (VehiclePosition, protobuf) da SMTR: substitui o JSON antigo (/gps/sppo e /sppo/conecta/gps, fora do ar).
+  // Decodificador mínimo, só dos campos usados: veículo (id), viagem (route_id, direction_id), posição (lat, lon, velocidade
+  // em m/s) e horário (epoch, segundos). O Worker apenas repassa os bytes; a decodificação é feita aqui, no celular.
+  function lerVeiculosRT(buf) {
+    var u = new Uint8Array(buf), dv = new DataView(u.buffer, u.byteOffset, u.byteLength), out = [];
+    function varint(p) { var r = 0, m = 1, b; do { b = u[p.i++]; r += (b & 127) * m; m *= 128; } while (b & 128); return r; }
+    function texto(a, b) { var s = ''; for (var i = a; i < b; i++) s += String.fromCharCode(u[i]); return s; }
+    // percorre uma mensagem: fn(campo, valor numérico, início, fim); início/fim só para campos de bytes (tipo 2)
+    function campos(a, b, fn) {
+      var p = { i: a };
+      while (p.i < b) {
+        var k = varint(p), f = Math.floor(k / 8), t = k % 8;
+        if (t === 0) fn(f, varint(p), 0, 0);
+        else if (t === 2) { var n = varint(p); fn(f, null, p.i, p.i + n); p.i += n; }
+        else if (t === 5) { fn(f, dv.getFloat32(p.i, true), 0, 0); p.i += 4; }
+        else if (t === 1) { fn(f, dv.getFloat64(p.i, true), 0, 0); p.i += 8; }
+        else throw new Error('protobuf: tipo ' + t);
+      }
+    }
+    campos(0, u.length, function (f, v, a, b) {
+      if (f !== 2) return;                                   // FeedMessage.entity
+      campos(a, b, function (f2, v2, a2, b2) {
+        if (f2 !== 4) return;                                // FeedEntity.vehicle
+        var o = { id: '', route: '', dir: -1, lat: null, lon: null, vel: 0, ts: 0 };
+        campos(a2, b2, function (f3, v3, a3, b3) {
+          if (f3 === 1) campos(a3, b3, function (f4, v4, a4, b4) {          // trip
+            if (f4 === 5) o.route = texto(a4, b4); else if (f4 === 6) o.dir = v4;
+          });
+          else if (f3 === 2) campos(a3, b3, function (f4, v4) {             // position
+            if (f4 === 1) o.lat = v4; else if (f4 === 2) o.lon = v4; else if (f4 === 5) o.vel = v4;
+          });
+          else if (f3 === 5) o.ts = v3;                                     // timestamp
+          else if (f3 === 8) campos(a3, b3, function (f4, v4, a4, b4) {     // vehicle descriptor
+            if (f4 === 1) o.id = texto(a4, b4);
+          });
+        });
+        out.push(o);
+      });
+    });
+    return out;
+  }
+
+  // bytes do feed GTFS-RT + tabela route_id -> número da linha (rotas.json) -> mesmo formato do gps.json
+  // (última posição de cada veículo; descarta sinais com mais de maxIdadeMin e linhas sem correspondência no GTFS).
+  function consolidarRT(buf, rotas, agoraMs, maxIdadeMin) {
+    var lim = (maxIdadeMin || 10) * 60, agora = (agoraMs || Date.now()) / 1000, ult = {}, max = 0;
+    lerVeiculosRT(buf).forEach(function (v) {
+      if (!v.id || !v.ts || v.lat == null || v.lon == null) return;
+      if (agora - v.ts > lim || v.ts - agora > 120) return;
+      var svc = rotas && rotas[v.route];
+      if (!svc) return;
+      if (!ult[v.id] || v.ts > ult[v.id].ts) { v.svc = svc; ult[v.id] = v; }
+      if (v.ts > max) max = v.ts;
+    });
+    var hora = function (s) { return fmtRio.format(new Date(s * 1000)); };
+    var buses = Object.keys(ult).map(function (k) {
+      var v = ult[k];
+      return [v.svc, k, Math.round(v.lat * 1e5) / 1e5, Math.round(v.lon * 1e5) / 1e5, Math.round((v.vel || 0) * 3.6),
+        v.dir === 1 ? 'V' : (v.dir === 0 ? 'I' : ''), hora(v.ts).replace(' ', 'T') + 'Z'];
+    });
+    return { updated: max ? hora(max).slice(0, 19) : '', buses: buses };
+  }
+
+  var api = { consolidarRT: consolidarRT, lerVeiculosRT: lerVeiculosRT, consolidarBRT: consolidarBRT, consolidar: consolidar, linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, planBaldeacao: planBaldeacao, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Planner = api;
 })(typeof window !== 'undefined' ? window : this);

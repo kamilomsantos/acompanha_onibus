@@ -413,10 +413,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js?v=20261006-6"></script>
+<script src="planner.js?v=20261121-1"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261025-5';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261121-1';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -1625,12 +1625,27 @@ function showFreshness() {
 }
 
 // 1ª opção: Worker do Cloudflare (repassa a SMTR com CORS e cache de 30 s; o celular consolida). Reserva: gps.json do GitHub Actions.
+// A SMTR desligou o JSON antigo do SPPO (11/2026): agora o Worker repassa o feed GTFS-Realtime (/rt, protobuf) e o celular
+// decodifica com Planner.consolidarRT, usando rotas.json (route_id -> número da linha; gerar_rotas.js).
+var rotasPromise = null;
+function carregarRotas() {
+  if (!rotasPromise) rotasPromise = fetch('rotas.json?v='+APP_V)
+    .then(function(r) { if (!r.ok) throw new Error('rotas ' + r.status); return r.json(); })
+    .catch(function(e) { rotasPromise = null; throw e; });
+  return rotasPromise;
+}
 function buscarSppo(forcar) {
   var t = forcar ? Date.now() : Math.floor(Date.now() / 30000);
   var doWorker = WORKER_URL
-    ? fetch(WORKER_URL + (WORKER_URL.indexOf('?') < 0 ? '?' : '&') + 't=' + t, { cache: 'no-store' })
-        .then(function(r) { if (!r.ok) throw new Error('worker ' + r.status); return r.json(); })
-        .then(function(arr) { if (!Array.isArray(arr) || arr.length < 100) throw new Error('worker sem dados'); return Planner.consolidar(arr); })
+    ? Promise.all([
+        fetch(WORKER_URL.replace(/\/+$/, '') + '/rt?t=' + t, { cache: 'no-store' })
+          .then(function(r) { if (!r.ok) throw new Error('worker ' + r.status); return r.arrayBuffer(); }),
+        carregarRotas()
+      ]).then(function(x) {
+        var j = Planner.consolidarRT(x[0], x[1], Date.now());
+        if (j.buses.length < 100) throw new Error('worker sem dados');
+        return j;
+      })
     : Promise.reject(new Error('sem worker'));
   return doWorker.catch(function() {
     return fetch(DATA_URL + '?t=' + (forcar ? Date.now() : Math.floor(Date.now() / 60000)), { cache: 'no-store' })
