@@ -1,21 +1,20 @@
-// Proxy CORS das APIs de GPS da SMTR para o app "Ônibus Rio ao Vivo".
-// Cloudflare Workers, plano gratuito: NÃO processa o JSON (limite de ~10 ms de CPU); só repassa o corpo da
-// resposta, com CORS e cache de borda. A consolidação (posição mais recente por veículo) é feita no celular.
+// Proxy CORS das APIs de GPS da SMTR para o app "Aê, Piloto".
+// Cloudflare Workers, plano gratuito: NÃO processa os dados (limite de ~10 ms de CPU); só repassa o corpo da
+// resposta, com CORS e cache de borda. A decodificação e a consolidação (posição mais recente por veículo) são feitas no celular.
 //
-// Rotas:  /rt           -> ônibus municipais, feed GTFS-Realtime (protobuf; o app decodifica) — USAR ESTA
-//         /  ou  /sppo  -> JSON antigo do SPPO (endereços "conecta" e "/gps/sppo" fora do ar desde 11/2026; sem uso)
-//         /brt          -> BRT ({ veiculos: [...] })
+// Rotas:  /rt   -> ônibus municipais, feed GTFS-Realtime (protobuf; o app decodifica)
+//         /brt  -> BRT ({ veiculos: [...] }, JSON)
+//         /sessao/... -> rastreamento por código (aba Encontro, exige o KV SESSOES)
+// (As rotas "/" e "/sppo" e os JSON antigos do SPPO, "/sppo/conecta/gps" e "/gps/sppo", foram removidos em 21/11/2026:
+//  a SMTR desligou esses endereços.)
 //
 // Cache (por data center): até FRESCO_S segundos devolve direto (HIT); entre FRESCO_S e VELHO_MAX_S devolve o dado
 // guardado NA HORA (STALE) e atualiza em segundo plano, para ninguém esperar a SMTR (~3 s); acima disso busca antes.
 
-const SPPO_NOVO   = 'https://dados.mobilidade.rio/sppo/conecta/gps';
-const SPPO_ANTIGO = 'https://dados.mobilidade.rio/gps/sppo';
 const BRT         = 'https://dados.mobilidade.rio/gps/brt';
-// Feed GTFS-Realtime (protobuf, ~185 KB) que substituiu o JSON do SPPO (os endereços acima deixaram de responder em 11/2026).
+// Feed GTFS-Realtime (protobuf, ~185 KB) que substituiu o JSON do SPPO.
 const RT_ONIBUS   = 'https://dados.mobilidade.rio/gtfs/realtime/onibus/vehicle-positions';
-const JANELA_MIN  = 2;
-const MIN_BYTES   = { sppo: 1000, brt: 2000, rt: 5000 };   // abaixo disso a resposta é considerada vazia/defeituosa
+const MIN_BYTES   = { brt: 2000, rt: 5000 };   // abaixo disso a resposta é considerada vazia/defeituosa
 const TIPO        = { rt: 'application/x-protobuf' };      // as demais fontes são JSON
 
 const CORS = {
@@ -24,14 +23,6 @@ const CORS = {
   'Access-Control-Allow-Headers': '*',
   'Access-Control-Expose-Headers': 'X-Cache, X-Idade, X-Fonte',
 };
-
-function horaRio(d) {
-  return new Intl.DateTimeFormat('sv-SE', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  }).format(d);
-}
 
 async function baixar(url, minBytes) {
   const r = await fetch(url);
@@ -43,16 +34,6 @@ async function baixar(url, minBytes) {
 
 // devolve { resposta, fonte } sem ler o corpo (stream)
 const FONTES = {
-  async sppo() {
-    const fim = new Date(), ini = new Date(fim.getTime() - JANELA_MIN * 60000);
-    try {
-      const r = await baixar(SPPO_NOVO + '?dataInicial=' + ini.toISOString() + '&dataFinal=' + fim.toISOString(), MIN_BYTES.sppo);
-      return { resposta: r, fonte: 'conecta' };
-    } catch (e) {
-      const r = await baixar(SPPO_ANTIGO + '?dataInicial=' + encodeURIComponent(horaRio(ini)) + '&dataFinal=' + encodeURIComponent(horaRio(fim)), MIN_BYTES.sppo);
-      return { resposta: r, fonte: 'antigo' };
-    }
-  },
   async brt() {
     return { resposta: await baixar(BRT, MIN_BYTES.brt), fonte: 'brt' };
   },
@@ -169,7 +150,6 @@ export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     const caminho = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
-    if (caminho === '/' || caminho === '/sppo') return servir('sppo', ctx, env);
     if (caminho === '/brt') return servir('brt', ctx, env);
     if (caminho === '/rt') return servir('rt', ctx, env);
     // ── sessão ──
@@ -178,7 +158,7 @@ export default {
     if (mPos && request.method === 'POST') return sessaoPost(mPos[1], mPos[2], env, request);
     const mGet = caminho.match(/^\/sessao\/([A-Z0-9]{4,6})$/);
     if (mGet && request.method === 'GET') return sessaoGet(mGet[1], env);
-    return new Response(JSON.stringify({ error: 'rota desconhecida', rotas: ['/rt', '/', '/sppo', '/brt', '/sessao/criar', '/sessao/:codigo'] }), {
+    return new Response(JSON.stringify({ error: 'rota desconhecida', rotas: ['/rt', '/brt', '/sessao/criar', '/sessao/:codigo'] }), {
       status: 404,
       headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8' },
     });
