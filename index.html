@@ -421,7 +421,7 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <script src="planner.js?v=20261121-1"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261121-3';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261121-4';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
@@ -990,6 +990,7 @@ var RAIO_EMBARQUE_M = 200, nPerto = 0;
 // com parada a até EMBARQUE_ZERO_M de A (tolera a imprecisão do GPS/toque no mapa). Se nenhuma passa ali, mostra as mais
 // próximas com um aviso (semAndarFalha); semAndarAtivo = a lista está restrita ao ponto de saída.
 var EMBARQUE_ZERO_M = 100, semAndarAtivo = false, semAndarFalha = false;
+var notasFinais = [];   // avisos explicativos da lista de viagens, mostrados no fim dela
 var tipoRota = 'normal';
 try { if (localStorage.getItem('aep.tipoRota') === 'rapida') tipoRota = 'rapida'; } catch (e) {}
 function definirTipoRota(v) {
@@ -1099,6 +1100,7 @@ function renderTrips() {
   $('panel-title').textContent = 'Viagens de A para B';
   $('counter').textContent = tripPlan.length + (tripPlan.length === 1 ? ' linha' : ' linhas') + (baldPlan.length ? ' + ' + baldPlan.length + ' c/ baldeação' : '');
   list.innerHTML = '';
+  notasFinais = [];
   var rapida = tipoRota === 'rapida';
   var tg = document.createElement('div'); tg.className = 'rota-toggle';
   tg.innerHTML = '<span class="rt-label">Tipo de rota</span>'
@@ -1113,7 +1115,7 @@ function renderTrips() {
   var note = document.createElement('div'); note.className = 'tnote';
   note.textContent = 'Atualizado às ' + hhmm(new Date()) + ' · dados dos ônibus de ' + String(dataUpdated || '').slice(11, 16)
     + ' · estimativa pela grade horária das linhas (linhas diretas; baldeação só quando não há direta ou poupa ' + (rapida ? '3' : '10') + ' min ou mais). No mapa: azul = sua viagem, vermelho tracejado = ônibus até o ponto de embarque, pontilhado preto = trecho a pé.';
-  list.appendChild(note);
+  // as notas e os avisos explicativos vão para o FIM da lista (no celular poluíam o topo)
   var idade = dataUpdated ? Math.round((Date.now() - Planner.rioMs(dataUpdated)) / 60000) : null;
   if (idade !== null && idade > 15) {
     var aviso = document.createElement('div'); aviso.className = 'tnote'; aviso.style.color = 'var(--red)';
@@ -1126,6 +1128,7 @@ function renderTrips() {
       : filterLines.length ? 'A linha ' + filterLines.join(', ') + ' não tem ônibus a caminho de A para B agora (ou não passa perto dos dois pontos). Apague o filtro de linhas para ver as outras.'
       : 'Nenhuma linha direta nem com uma baldeação, com ônibus a caminho, entre A e B agora. Toque em "Rotas no Google Maps" para outras opções.';
     list.appendChild(e);
+    list.appendChild(note);
     tripLayer.clearLayers();
     updatePanelSum();
     return;
@@ -1141,6 +1144,8 @@ function renderTrips() {
   }
   if (tripPlan.length) renderTripGroups(list);
   renderBaldeacoes(list);
+  notasFinais.forEach(function(n) { list.appendChild(n); });
+  list.appendChild(note);
   if (tripSel >= 0) selectTrip(tripSel, false); else if (baldSel >= 0) selectBald(baldSel, false); else tripLayer.clearLayers();
   updatePanelSum();
 }
@@ -1201,13 +1206,13 @@ function renderTripGroups(list) {
   if (semAndarFalha) {
     var av = document.createElement('div'); av.className = 'tnote'; av.style.color = 'var(--amber)';
     av.textContent = 'Nenhuma linha passa no seu ponto de saída (a até ' + EMBARQUE_ZERO_M + ' m) e chega a B agora. Estas são as opções com parada mais próxima, que exigem caminhar. Mova o ponto A para uma parada, ou use o tipo Rápida.';
-    list.appendChild(av);
+    notasFinais.push(av);
   }
   if (nPerto > 0) secao('Embarque a até ' + RAIO_EMBARQUE_M + ' m da localização', 0, nPerto, 6);
   else {
     var aviso = document.createElement('div'); aviso.className = 'tnote'; aviso.style.color = 'var(--amber)';
     aviso.textContent = 'Nenhuma linha com parada a até ' + RAIO_EMBARQUE_M + ' m da localização leva até B agora. Estas são opções com caminhada maior.';
-    list.appendChild(aviso);
+    if (!semAndarFalha) notasFinais.push(aviso);   // com semAndarFalha já há um aviso mais específico
   }
   // demais opções em sequência: até 500 m, até 1 km, até 2 km (BRT)
   var ini = nPerto;
@@ -1937,12 +1942,16 @@ var histSaida = (function() {
 (function() {
   var ALERTA_API = 'https://radarmeteorologico.com.br/api/v1/alertas?uf=RJ';
   var ALERTA_KEY = 'onibus.alerta_dismissed';
+  var NIVEL_MINIMO_ALERTA = 3;
   function carregar() {
     fetch(ALERTA_API)
       .then(function(r) { return r.json(); })
       .then(function(d) {
         var lista = (d.alertas || []).filter(function(a) { return !a.futuro; });
         var chuva = lista.filter(function(a) {
+          // só nível 3 ou mais (INMET: 1 Perigo Potencial, 2 Perigo, 3 Grande Perigo); os de nível 1 e 2 são quase diários
+          // e faziam o banner parecer uma notícia fixa (pedido do Kamilo, 21/11/2026)
+          if ((a.nivel || 0) < NIVEL_MINIMO_ALERTA) return false;
           var ev = String(a.evento || '').toLowerCase();
           return ev.indexOf('tempestade') >= 0 || ev.indexOf('chuva') >= 0 ||
                  ev.indexOf('inundaç') >= 0 || ev.indexOf('alagamento') >= 0;
