@@ -421,12 +421,11 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <script src="planner.js?v=20261121-1"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261121-4';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
-var DATA_URL = 'https://raw.githubusercontent.com/kamilomsantos/acompanha_onibus/dados/gps.json';
+var APP_V = '20261121-5';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
 var NOM_URL  = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=br&addressdetails=1&viewbox=-43.8,-22.7,-43.0,-23.1&q=';
-var WORKER_URL = 'https://acompanha-onibus.kamilo-santos.workers.dev/';   // Worker do Cloudflare; se falhar, usa o gps.json
+var WORKER_URL = 'https://acompanha-onibus.kamilo-santos.workers.dev/';   // Worker do Cloudflare: repassa o GPS da SMTR (única fonte; sem reserva)
 var REFRESH  = 60000;
 var RAIO_PERTO_KM = 1.5;
 var CENTER   = [-22.9068, -43.1729];
@@ -1119,7 +1118,7 @@ function renderTrips() {
   var idade = dataUpdated ? Math.round((Date.now() - Planner.rioMs(dataUpdated)) / 60000) : null;
   if (idade !== null && idade > 15) {
     var aviso = document.createElement('div'); aviso.className = 'tnote'; aviso.style.color = 'var(--red)';
-    aviso.textContent = '⚠️ Os dados dos ônibus estão com ' + idade + ' min de atraso (a coleta automática ainda não atualizou). A estimativa pode estar errada.';
+    aviso.textContent = '⚠️ Os dados dos ônibus estão com ' + idade + ' min de atraso (a SMTR ainda não atualizou). A estimativa pode estar errada.';
     list.appendChild(aviso);
   }
   if (!tripPlan.length && !baldPlan.length) {
@@ -1692,7 +1691,8 @@ function showFreshness() {
   setStatus(cls, 'Aê, Piloto', 'Dados de ' + hora + (min !== null ? ' (há ' + min + ' min)' : '') + ' · SMTR/Rio');
 }
 
-// 1ª opção: Worker do Cloudflare (repassa a SMTR com CORS e cache de 30 s; o celular consolida). Reserva: gps.json do GitHub Actions.
+// Worker do Cloudflare (repassa a SMTR com CORS e cache de 30 s; o celular consolida). Não há mais reserva: o gps.json do
+// GitHub Actions foi aposentado em 21/11/2026 (a coleta parou em 11/11 e mostrava ônibus velhos como se fossem de agora).
 // A SMTR desligou o JSON antigo do SPPO (11/2026): agora o Worker repassa o feed GTFS-Realtime (/rt, protobuf) e o celular
 // decodifica com Planner.consolidarRT, usando rotas.json (route_id -> número da linha; gerar_rotas.js).
 var rotasPromise = null;
@@ -1704,7 +1704,7 @@ function carregarRotas() {
 }
 function buscarSppo(forcar) {
   var t = forcar ? Date.now() : Math.floor(Date.now() / 30000);
-  var doWorker = WORKER_URL
+  return WORKER_URL
     ? Promise.all([
         fetch(WORKER_URL.replace(/\/+$/, '') + '/rt?t=' + t, { cache: 'no-store' })
           .then(function(r) { if (!r.ok) throw new Error('worker ' + r.status); return r.arrayBuffer(); }),
@@ -1715,10 +1715,6 @@ function buscarSppo(forcar) {
         return j;
       })
     : Promise.reject(new Error('sem worker'));
-  return doWorker.catch(function() {
-    return fetch(DATA_URL + '?t=' + (forcar ? Date.now() : Math.floor(Date.now() / 60000)), { cache: 'no-store' })
-      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
-  });
 }
 
 // BRT: opcional; se falhar, segue só com os ônibus
@@ -1753,8 +1749,7 @@ function carregar(forcar) {
     .catch(function(e) {
       var msg;
       if (!navigator.onLine) msg = '📶 Sem internet no aparelho. Atualiza sozinho quando voltar.';
-      else if (String(e.message).indexOf('404') >= 0) msg = '⏳ Dados ainda não publicados. O primeiro ciclo leva até 10 min.';
-      else msg = '⚠️ Não foi possível carregar os dados (' + e.message + '). Nova tentativa em 1 min.';
+      else msg = '⚠️ Os dados dos ônibus (SMTR) não estão disponíveis agora (' + e.message + '). Nova tentativa em 1 min.';
       setStatus('err', null, msg.replace(/^\S+\s/, ''));
       if (!apiErrorState) { apiErrorState = true; showToast(msg, 'error', 6000); }
     });
