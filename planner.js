@@ -377,25 +377,11 @@
     });
   }
 
-  // Resposta do BRT ({ veiculos: [...] }) -> linhas no formato dos ônibus (servico, id, lat, lon, vel, sentido, hora), com o 8º item 'B' (modal BRT).
-  // Descarta posições antigas (muitos veículos do BRT ficam parados sem GPS) e linhas de serviço sem sentido.
   var fmtRio = typeof Intl !== 'undefined' ? new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit' }) : null;
-  function consolidarBRT(json, agoraMs, maxIdadeMin) {
-    var lim = (maxIdadeMin || 15) * 60000, agora = agoraMs || Date.now(), out = [];
-    ((json && json.veiculos) || []).forEach(function (v) {
-      var t = Number(v.dataHora);
-      if (!t || agora - t > lim || t - agora > 120000) return;
-      if (v.latitude == null || v.longitude == null || !v.codigo || v.linha == null) return;
-      var sentido = v.sentido === 'ida' ? 'I' : (v.sentido === 'volta' ? 'V' : '');
-      out.push([String(v.linha), 'BRT' + v.codigo, Math.round(v.latitude * 1e5) / 1e5, Math.round(v.longitude * 1e5) / 1e5,
-        Math.round(v.velocidade || 0), sentido, fmtRio.format(new Date(t)).replace(' ', 'T') + 'Z', 'B']);
-    });
-    return out;
-  }
 
-  // GTFS-Realtime (VehiclePosition, protobuf) da SMTR: substitui o JSON antigo (/gps/sppo e /sppo/conecta/gps, fora do ar).
+  // GTFS-Realtime (VehiclePosition, protobuf) da SMTR: substitui os JSON antigos (/gps/sppo, /sppo/conecta/gps e /gps/brt).
   // Decodificador mínimo, só dos campos usados: veículo (id), viagem (route_id, direction_id), posição (lat, lon, velocidade
   // em m/s) e horário (epoch, segundos). O Worker apenas repassa os bytes; a decodificação é feita aqui, no celular.
   function lerVeiculosRT(buf) {
@@ -439,7 +425,8 @@
 
   // bytes do feed GTFS-RT + tabela route_id -> número da linha (rotas.json) -> mesmo formato dos ônibus: [servico, id, lat, lon, vel, sentido, hora]
   // (última posição de cada veículo; descarta sinais com mais de maxIdadeMin e linhas sem correspondência no GTFS).
-  function consolidarRT(buf, rotas, agoraMs, maxIdadeMin) {
+  // modal = 'B' para o feed do BRT: o id do veículo ganha o prefixo "BRT" e cada linha traz o 8º item 'B' (modal BRT).
+  function consolidarRT(buf, rotas, agoraMs, maxIdadeMin, modal) {
     var lim = (maxIdadeMin || 10) * 60, agora = (agoraMs || Date.now()) / 1000, ult = {}, max = 0;
     lerVeiculosRT(buf).forEach(function (v) {
       if (!v.id || !v.ts || v.lat == null || v.lon == null) return;
@@ -452,12 +439,14 @@
     var hora = function (s) { return fmtRio.format(new Date(s * 1000)); };
     var buses = Object.keys(ult).map(function (k) {
       var v = ult[k];
-      return [v.svc, k, Math.round(v.lat * 1e5) / 1e5, Math.round(v.lon * 1e5) / 1e5, Math.round((v.vel || 0) * 3.6),
+      var linha = [v.svc, modal === 'B' ? 'BRT' + k : k, Math.round(v.lat * 1e5) / 1e5, Math.round(v.lon * 1e5) / 1e5, Math.round((v.vel || 0) * 3.6),
         v.dir === 1 ? 'V' : (v.dir === 0 ? 'I' : ''), hora(v.ts).replace(' ', 'T') + 'Z'];
+      if (modal === 'B') linha.push('B');
+      return linha;
     });
     return { updated: max ? hora(max).slice(0, 19) : '', buses: buses };
   }
 
-  var api = { consolidarRT: consolidarRT, lerVeiculosRT: lerVeiculosRT, consolidarBRT: consolidarBRT, linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, planBaldeacao: planBaldeacao, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
+  var api = { consolidarRT: consolidarRT, lerVeiculosRT: lerVeiculosRT, linhasNoPonto: linhasNoPonto, hav: hav, prep: prep, project: project, simplify: simplify, plan: plan, planBaldeacao: planBaldeacao, slice: slice, busesOnShape: busesOnShape, dirOf: dirOf, rioMs: rioMs, ageMin: ageMin };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Planner = api;
 })(typeof window !== 'undefined' ? window : this);

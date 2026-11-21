@@ -2,20 +2,20 @@
 // Cloudflare Workers, plano gratuito: NÃO processa os dados (limite de ~10 ms de CPU); só repassa o corpo da
 // resposta, com CORS e cache de borda. A decodificação e a consolidação (posição mais recente por veículo) são feitas no celular.
 //
-// Rotas:  /rt   -> ônibus municipais, feed GTFS-Realtime (protobuf; o app decodifica)
-//         /brt  -> BRT ({ veiculos: [...] }, JSON)
+// Rotas:  /rt      -> ônibus municipais, feed GTFS-Realtime (protobuf; o app decodifica)
+//         /rt-brt  -> BRT, feed GTFS-Realtime (protobuf; o app decodifica)
 //         /sessao/... -> rastreamento por código (aba Encontro, exige o KV SESSOES)
-// (As rotas "/" e "/sppo" e os JSON antigos do SPPO, "/sppo/conecta/gps" e "/gps/sppo", foram removidos em 21/11/2026:
-//  a SMTR desligou esses endereços.)
+// (Removidos em 21/11/2026: as rotas "/", "/sppo" e "/brt" e os JSON antigos da SMTR — "/sppo/conecta/gps", "/gps/sppo" e
+//  "/gps/brt" —, que foram desligados ou migrados para o GTFS-Realtime.)
 //
 // Cache (por data center): até FRESCO_S segundos devolve direto (HIT); entre FRESCO_S e VELHO_MAX_S devolve o dado
 // guardado NA HORA (STALE) e atualiza em segundo plano, para ninguém esperar a SMTR (~3 s); acima disso busca antes.
 
-const BRT         = 'https://dados.mobilidade.rio/gps/brt';
-// Feed GTFS-Realtime (protobuf, ~185 KB) que substituiu o JSON do SPPO.
+// Feeds GTFS-Realtime (protobuf): ônibus (~185 KB) e BRT (~23 KB). Substituíram os JSON antigos da SMTR.
 const RT_ONIBUS   = 'https://dados.mobilidade.rio/gtfs/realtime/onibus/vehicle-positions';
-const MIN_BYTES   = { brt: 2000, rt: 5000 };   // abaixo disso a resposta é considerada vazia/defeituosa
-const TIPO        = { rt: 'application/x-protobuf' };      // as demais fontes são JSON
+const RT_BRT      = 'https://dados.mobilidade.rio/gtfs/realtime/brt/vehicle-positions';
+const MIN_BYTES   = { rt: 5000, 'rt-brt': 2000 };   // abaixo disso a resposta é considerada vazia/defeituosa
+const TIPO        = 'application/x-protobuf';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -34,11 +34,11 @@ async function baixar(url, minBytes) {
 
 // devolve { resposta, fonte } sem ler o corpo (stream)
 const FONTES = {
-  async brt() {
-    return { resposta: await baixar(BRT, MIN_BYTES.brt), fonte: 'brt' };
-  },
   async rt() {
     return { resposta: await baixar(RT_ONIBUS, MIN_BYTES.rt), fonte: 'gtfs-rt' };
+  },
+  async 'rt-brt'() {
+    return { resposta: await baixar(RT_BRT, MIN_BYTES['rt-brt']), fonte: 'gtfs-rt-brt' };
   },
 };
 
@@ -50,7 +50,7 @@ async function atualizar(nome, env) {
   const guardar = new Response(resposta.body, {
     status: 200,
     headers: {
-      'Content-Type': TIPO[nome] || 'application/json; charset=utf-8',
+      'Content-Type': TIPO,
       'Cache-Control': 'public, max-age=' + velho,
       'X-Gerado': String(Date.now()),
       'X-Fonte': fonte,
@@ -150,15 +150,15 @@ export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     const caminho = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
-    if (caminho === '/brt') return servir('brt', ctx, env);
     if (caminho === '/rt') return servir('rt', ctx, env);
+    if (caminho === '/rt-brt') return servir('rt-brt', ctx, env);
     // ── sessão ──
     if (caminho === '/sessao/criar' && request.method === 'POST') return sessaoCriar(env);
     const mPos = caminho.match(/^\/sessao\/([A-Z0-9]{4,6})\/([^/]+)$/);
     if (mPos && request.method === 'POST') return sessaoPost(mPos[1], mPos[2], env, request);
     const mGet = caminho.match(/^\/sessao\/([A-Z0-9]{4,6})$/);
     if (mGet && request.method === 'GET') return sessaoGet(mGet[1], env);
-    return new Response(JSON.stringify({ error: 'rota desconhecida', rotas: ['/rt', '/brt', '/sessao/criar', '/sessao/:codigo'] }), {
+    return new Response(JSON.stringify({ error: 'rota desconhecida', rotas: ['/rt', '/rt-brt', '/sessao/criar', '/sessao/:codigo'] }), {
       status: 404,
       headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8' },
     });

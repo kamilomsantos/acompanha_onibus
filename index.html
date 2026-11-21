@@ -418,10 +418,10 @@ body:has(.search-bar.min) .btn-tema { width:34px; height:34px; }
 <div class="toast" id="toast"></div>
 <div id="map"></div>
 
-<script src="planner.js?v=20261121-6"></script>
+<script src="planner.js?v=20261121-7"></script>
 <script>
 // ───────── Config ─────────
-var APP_V = '20261121-6';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
+var APP_V = '20261121-7';   // muda a cada versão: evita o celular usar planner.js/linhas.json antigos do cache
 // Busca de lugares: Photon (komoot, base OpenStreetMap, aceita busca enquanto digita); se falhar ou não achar nada, cai no Nominatim.
 var PHOTON_URL = 'https://photon.komoot.io/api/?limit=6&lat=-22.9068&lon=-43.1729&bbox=-43.8,-23.1,-43.0,-22.7&q=';
 var NOM_URL  = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=br&addressdetails=1&viewbox=-43.8,-22.7,-43.0,-23.1&q=';
@@ -1720,9 +1720,13 @@ function buscarSppo(forcar) {
 // BRT: opcional; se falhar, segue só com os ônibus
 function buscarBrt() {
   if (!WORKER_URL) return Promise.resolve([]);
-  return fetch(WORKER_URL.replace(/\/+$/, '') + '/brt?t=' + Math.floor(Date.now() / 30000), { cache: 'no-store' })
-    .then(function(r) { if (!r.ok) throw new Error('brt ' + r.status); return r.json(); })
-    .then(function(j) { return Planner.consolidarBRT(j, Date.now()); })
+  // feed GTFS-Realtime do BRT (/rt-brt, protobuf), decodificado como o dos ônibus; modal 'B'; sinais de até 15 min
+  return Promise.all([
+      fetch(WORKER_URL.replace(/\/+$/, '') + '/rt-brt?t=' + Math.floor(Date.now() / 30000), { cache: 'no-store' })
+        .then(function(r) { if (!r.ok) throw new Error('brt ' + r.status); return r.arrayBuffer(); }),
+      carregarRotas()
+    ])
+    .then(function(x) { return Planner.consolidarRT(x[0], x[1], Date.now(), 15, 'B').buses; })
     .catch(function() { return []; });
 }
 
